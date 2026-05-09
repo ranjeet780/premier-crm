@@ -1,0 +1,36 @@
+{
+"name": "admin-panel-backend",
+"version": "1.0.0",
+"main": "index.js",
+"scripts": {
+"start": "node index.js",
+"dev": "nodemon index.js"
+},
+"engines": {
+"node": "20.x"
+},
+"license": "ISC",
+"description": "Backend for Admin Panel",
+"dependencies": {
+"bcrypt": "^6.0.0",
+"bcryptjs": "^3.0.2",
+"cors": "^2.8.5",
+"date-fns": "^4.1.0",
+"dotenv": "^17.2.1",
+"express": "^5.1.0",
+"jsonwebtoken": "^9.0.2",
+"mongodb": "^7.1.0",
+"mongoose": "^8.18.0",
+"multer": "^2.0.2",
+"node-cron": "^4.2.1",
+"nodemailer": "^7.0.6",
+"otp-generator": "^4.0.1",
+"pdfkit": "^0.17.2",
+"razorpay": "^2.9.6",
+"socket.io": "^4.8.1",
+"twilio": "^5.9.0"
+},
+"devDependencies": {
+"nodemon": "^3.1.10"
+}
+}
