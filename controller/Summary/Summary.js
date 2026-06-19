@@ -42,6 +42,7 @@ const getAdminSummary = async (req, res) => {
       pendingTasks,
       inProgressTasks,
     });
+
   } catch (error) {
     console.error("Error fetching admin summary:", error);
     return res.status(500).json({ error: "Internal server error" });

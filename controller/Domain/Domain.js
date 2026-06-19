@@ -32,21 +32,21 @@ const parseDate = (value) => {
 
 const createDomain = async (req, res) => {
   try {
-    const { 
-      name, 
-      url, 
-      plan, 
-      clientName, 
-      purchasedOn, 
-      expireDate, 
-      platform, 
-      actualAmount, 
-      paidAmount 
+    const {
+      name,
+      url,
+      plan,
+      clientName,
+      purchasedOn,
+      expireDate,
+      platform,
+      actualAmount,
+      paidAmount
     } = req.body;
 
     if (!name || !url || !plan || !clientName || !purchasedOn || !expireDate || !platform || !actualAmount || !paidAmount) {
-      return res.status(400).json({ 
-        message: "name, url, plan, clientName, purchasedOn, expireDate, platform, actualAmount and paidAmount are required" 
+      return res.status(400).json({
+        message: "name, url, plan, clientName, purchasedOn, expireDate, platform, actualAmount and paidAmount are required"
       });
     }
 

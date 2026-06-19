@@ -31,12 +31,15 @@ function toMinutes(t) {
 
 function sendLoginResponse(res, emp, token, extra = {}) {
   return res.status(200).json({
+
     message: "Login success",
     token,
     employeeId: emp._id,
     ename: emp.ename,
     official_email: emp.official_email,
     role: emp.role,
+    userType: emp.userType || "employee",
+    screenshotInterval: emp.screenshotInterval || 300,
     ...extra,
   });
 }
@@ -56,6 +59,24 @@ const UserLogin = async (req, res) => {
 
     const ok = await bcrypt.compare(password, emp.password || "");
     if (!ok) return res.status(400).json({ message: "Invalid password" });
+
+    /* 1.1️⃣ CHECK LOCKED STATUS */
+    if (emp.isLocked) {
+      if (!req.body.unlockOTP) {
+        return res.status(423).json({
+          message: "Account is locked due to inactivity. Please enter the unlock code from Admin.",
+          isLocked: true
+        });
+      }
+      if (req.body.unlockOTP !== emp.unlockOTP) {
+        return res.status(400).json({ message: "Invalid unlock code" });
+      }
+      // If code matches, unlock account
+      await SignUp.findByIdAndUpdate(emp._id, {
+        isLocked: false,
+        unlockOTP: null
+      });
+    }
 
     const token = jwt.sign(
       { id: emp._id, role: emp.role },
@@ -236,11 +257,7 @@ const UserLogout = async (req, res) => {
     }
 
     attendance.check_out = formatTime(now);
-
-    const [inH, inM] = attendance.check_in.split(":").map(Number);
-    const [outH, outM] = attendance.check_out.split(":").map(Number);
-    const totalMinutes = (outH * 60 + outM) - (inH * 60 + inM);
-    attendance.workingHours = Number(Math.max(0, totalMinutes / 60).toFixed(2));
+    // Working hours are now tracked via screen screenshots incrementally.
 
     await attendance.save();
 
@@ -381,10 +398,72 @@ const resetUserPassword = async (req, res) => {
   }
 };
 
+const lockUserByInactivity = async (req, res) => {
+  try {
+    const { employeeId } = req.body;
+    if (!employeeId) return res.status(400).json({ message: "employeeId is required" });
+
+    // Generate random 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+    await SignUp.findByIdAndUpdate(employeeId, {
+      isLocked: true,
+      unlockOTP: code,
+      $inc: { inactivityLogoutCount: 1 }
+    });
+
+    res.json({ message: "User locked successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Lock error", error: err.message });
+  }
+};
+
+const getLockedStatus = async (req, res) => {
+  try {
+    const { employeeId } = req.query;
+    const emp = await SignUp.findById(employeeId);
+    if (!emp) return res.status(404).json({ message: "Employee not found" });
+    res.json({ isLocked: emp.isLocked });
+  } catch (err) {
+    res.status(500).json({ message: "Error", error: err.message });
+  }
+};
+
+const generateManualCode = async (req, res) => {
+  try {
+    const { employeeId } = req.body;
+    console.log("Generating manual code for employeeId:", employeeId);
+    if (!employeeId) return res.status(400).json({ message: "employeeId is required" });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log("New code generated:", code);
+
+    const updated = await SignUp.findByIdAndUpdate(employeeId, {
+      isLocked: true,
+      unlockOTP: code,
+      $inc: { inactivityLogoutCount: 1 }
+    }, { new: true });
+
+    if (!updated) {
+      console.log("Employee not found for id:", employeeId);
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    console.log("Successfully updated employee with new code");
+    res.json({ message: "Code generated successfully", code });
+  } catch (err) {
+    console.error("generateManualCode error:", err);
+    res.status(500).json({ message: "Error generating code", error: err.message });
+  }
+};
+
 module.exports = {
   UserLogin,
   UserLogout,
   getWorkingHours,
   forgotPassword,
   resetUserPassword,
+  lockUserByInactivity,
+  getLockedStatus,
+  generateManualCode
 };

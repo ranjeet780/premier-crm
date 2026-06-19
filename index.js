@@ -41,13 +41,14 @@ const notificationForAllRoutes = require("./Routes/notificationForAllRoutes");
 
   // Middlewares
   app.use(cors(corsOptions));
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use("/uploads", express.static(path.join(process.cwd(), "controller/uploads")));
 
   const Router = require('./Routes/Routes');
   app.use("/api/notifications", notificationRoutes);
   app.use("/api/notifications-all", notificationForAllRoutes);
+  app.use("/api/screenshots", require("./Routes/screenshotRoutes"));
   const normalizePermissions = require("./controller/middleware/normalizePermissions");
   const authMiddleware =require('./controller/middleware/authMiddleware')
 

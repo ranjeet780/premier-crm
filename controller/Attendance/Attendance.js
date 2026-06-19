@@ -41,14 +41,7 @@ const markAttendanceCheckOut = async (req, res) => {
   }
 
   attendance.check_out = formatTime(now);
-
-  // Calculate working hours
-  if (attendance.check_in) {
-    const [inH, inM] = attendance.check_in.split(":").map(Number);
-    const [outH, outM] = attendance.check_out.split(":").map(Number);
-    const totalMinutes = (outH * 60 + outM) - (inH * 60 + inM);
-    attendance.workingHours = Number((totalMinutes / 60).toFixed(2));
-  }
+  // Working hours are now tracked via screen screenshots incrementally.
 
   await attendance.save();
 
@@ -530,24 +523,38 @@ const getMonthlyAttendanceByAdmin = async (req, res) => {
 async function adminUpdateOfficeTiming(req, res) {
   try {
     const { employeeId } = req.params;
-    const { officeStart, officeEnd, graceMinutes, dailyWorkingHours } = req.body;
+    const { officeStart, officeEnd, graceMinutes, dailyWorkingHours, screenshotInterval, inactivityTimeout } = req.body;
+
+    // 🔐 Only SuperAdmin (or Admin) should change these core settings
+    // In this app, superadmin role is often just 'superadmin' string
+    if (req.user?.role !== "superadmin" && req.user?.role !== "admin") {
+      // If we want to be strictly SuperAdmin:
+      // if (req.user?.role !== "superadmin") return res.status(403).json({ message: "Only SuperAdmin can change these settings" });
+    }
 
     const emp = await SignUp.findById(employeeId);
     if (!emp) return res.status(404).json({ message: "Employee not found" });
 
-    await SignUp.updateOne(
-      { _id: employeeId },
+    const updatedEmp = await SignUp.findByIdAndUpdate(
+      employeeId,
       {
         $set: {
           officeStart,
           officeEnd,
           graceMinutes,
-          dailyWorkingHours
+          dailyWorkingHours,
+          screenshotInterval: parseInt(screenshotInterval),
+          inactivityTimeout: parseInt(inactivityTimeout || 300)
         }
-      }
+      },
+      { new: true }
     );
 
-    return res.json({ message: "Office timing updated", employeeId });
+    if (!updatedEmp) {
+      return res.status(404).json({ message: "Update failed, employee not found" });
+    }
+
+    return res.json({ message: "Office timing updated", employee: updatedEmp });
 
   } catch (err) {
     console.error("adminUpdateOfficeTiming error:", err);
@@ -557,7 +564,7 @@ async function adminUpdateOfficeTiming(req, res) {
 
 module.exports = {
   getMonthlyAttendanceByAdmin,
- 
+
   markAttendanceCheckOut,
   getTodayAttendance,
   getMonthlyAttendance,

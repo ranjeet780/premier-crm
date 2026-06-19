@@ -163,9 +163,6 @@ const SignUpSchema = new mongoose.Schema({
         createdAt: { type: Date, default: Date.now }
     }],
 
-    fcmTokens: [{ type: String }],
-    deviceTokens: [{ type: String }],
-
     notificationPreferences: {
         email: { type: Boolean, default: true },
         inApp: { type: Boolean, default: true },
@@ -178,6 +175,11 @@ const SignUpSchema = new mongoose.Schema({
     },
     isActive: { type: Boolean, default: true },
     employeeId: { type: String, unique: true },
+    isLocked: { type: Boolean, default: false },
+    unlockOTP: { type: String, default: null },
+    screenshotInterval: { type: Number, default: 300 }, // in seconds
+    inactivityLogoutCount: { type: Number, default: 0 },
+    inactivityTimeout: { type: Number, default: 300 }, // in seconds
 
 }, { timestamps: true });
 

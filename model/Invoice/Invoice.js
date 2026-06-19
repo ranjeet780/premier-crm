@@ -14,6 +14,7 @@ const invoiceSchema = new mongoose.Schema({
     ref: "ClientLeads",
     required: true,
   },
+
   clientEmail: { type: String, required: true },
   clientName: { type: String, required: true },
   clientGstNumber: { type: String, default: "" },

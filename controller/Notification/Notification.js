@@ -62,43 +62,43 @@ const getAllNotifications = async (req, res) => {
 };
 
 const markAsRead = async (req, res) => {
-    try {
-        const { notificationId } = req.params;
-        const { userId } = req.body;
-        let update = {};
-        if (userId) {
-          update = { $addToSet: { readBy: userId } };
-        } else {
-          // Fallback for admin bell endpoint where userId is not sent.
-          update = { $set: { status: "read" } };
-        }
-
-        const notification = await Notification.findByIdAndUpdate(notificationId, update, {
-          new: true,
-        });
-
-        if (!notification) return res.status(404).json({ message: "Notification not found" });
-
-        res.status(200).json({ message: "Notification marked as read", notification });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Server Error", error });
+  try {
+    const { notificationId } = req.params;
+    const { userId } = req.body;
+    let update = {};
+    if (userId) {
+      update = { $addToSet: { readBy: userId } };
+    } else {
+      // Fallback for admin bell endpoint where userId is not sent.
+      update = { $set: { status: "read" } };
     }
+
+    const notification = await Notification.findByIdAndUpdate(notificationId, update, {
+      new: true,
+    });
+
+    if (!notification) return res.status(404).json({ message: "Notification not found" });
+
+    res.status(200).json({ message: "Notification marked as read", notification });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server Error", error });
+  }
 };
 const deleteNotice = async (req, res) => {
-    try {
-        const { id } = req.params; // notice ID from URL
-        const deleted = await Notification.findByIdAndDelete(id);
+  try {
+    const { id } = req.params; // notice ID from URL
+    const deleted = await Notification.findByIdAndDelete(id);
 
-        if (!deleted) {
-            return res.status(404).json({ message: "Notice not found" });
-        }
-
-        res.json({ message: "✅ Notice deleted successfully!" });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Error deleting notice" });
+    if (!deleted) {
+      return res.status(404).json({ message: "Notice not found" });
     }
+
+    res.json({ message: "✅ Notice deleted successfully!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error deleting notice" });
+  }
 };
 
 const updateNoticeMeta = async (req, res) => {
@@ -130,9 +130,9 @@ const updateNoticeMeta = async (req, res) => {
 };
 
 module.exports = {
-    sendNotification,
-    deleteNotice,
-    updateNoticeMeta,
-    getAllNotifications,
-    markAsRead,
+  sendNotification,
+  deleteNotice,
+  updateNoticeMeta,
+  getAllNotifications,
+  markAsRead,
 };

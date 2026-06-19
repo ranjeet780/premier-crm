@@ -101,15 +101,15 @@ const calculateSalary = ({
   attendance.forEach((att) => {
     if (att.status === "Present") {
       present++;
-      totalWorkingHours += att.totalHours || 0;
+      totalWorkingHours += att.workingHours || 0;
       if (att.isLate) lateDays++;
-    } 
+    }
     else if (att.status === "Absent") {
       absent++;
-    } 
+    }
     else if (att.status === "Half Day") {
       halfDay++;
-      totalWorkingHours += att.totalHours || 0;
+      totalWorkingHours += att.workingHours || 0;
     }
   });
 
@@ -162,91 +162,91 @@ const calculateSalary = ({
 };
 
 const generateSalary = async (req, res) => {
-    try {
-        const { empId } = req.params;
-        const { month, year } = req.body;
+  try {
+    const { empId } = req.params;
+    const { month, year } = req.body;
 
-        // Check if already exists
-        const existing = await Salary.findOne({ employeeId: empId, month, year });
-        if (existing) return res.status(400).json({ message: "Salary already generated for this month" });
+    // Check if already exists
+    const existing = await Salary.findOne({ employeeId: empId, month, year });
+    if (existing) return res.status(400).json({ message: "Salary already generated for this month" });
 
-        // Month name → number mapping
-        const monthToNumber = {
-            January: 1, February: 2, March: 3, April: 4,
-            May: 5, June: 6, July: 7, August: 8,
-            September: 9, October: 10, November: 11, December: 12
-        };
+    // Month name → number mapping
+    const monthToNumber = {
+      January: 1, February: 2, March: 3, April: 4,
+      May: 5, June: 6, July: 7, August: 8,
+      September: 9, October: 10, November: 11, December: 12
+    };
 
-        const m = monthToNumber[month];
-        if (!m) return res.status(400).json({ message: "Invalid month format" });
+    const m = monthToNumber[month];
+    if (!m) return res.status(400).json({ message: "Invalid month format" });
 
-        // Correct date range
-        const from = new Date(year, m - 1, 1);      // e.g. 2025, 10, 1
-        const to = new Date(year, m, 0);            // last day of this month
+    // Correct date range
+    const from = new Date(year, m - 1, 1);      // e.g. 2025, 10, 1
+    const to = new Date(year, m, 0);            // last day of this month
 
-        // 1️⃣ Get employee
-        const employee = await SignUp.findById(empId);
-        if (!employee) return res.status(404).json({ message: "Employee not found" });
+    // 1️⃣ Get employee
+    const employee = await SignUp.findById(empId);
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
 
-        const basicPay = employee.givenSalary || 0;
-        const perDaySalary = basicPay / 30;
+    const basicPay = employee.givenSalary || 0;
+    const perDaySalary = basicPay / 30;
 
-        // 2️⃣ Fetch Attendance (correct field is empId)
-        const attendance = await Attendance.find({
-            empId: empId,
-            date: { $gte: from, $lte: to },
-        });
+    // 2️⃣ Fetch Attendance (correct field is empId)
+    const attendance = await Attendance.find({
+      empId: empId,
+      date: { $gte: from, $lte: to },
+    });
 
-        // 3️⃣ Fetch Leaves
-        const leaves = await Leave.find({
-            employeeId: empId,
-            status: "Approved",
-            from_date: { $lte: to },
-            to_date: { $gte: from },
-        });
+    // 3️⃣ Fetch Leaves
+    const leaves = await Leave.find({
+      employeeId: empId,
+      status: "Approved",
+      from_date: { $lte: to },
+      to_date: { $gte: from },
+    });
 
-        // 4️⃣ Calculate Salary
-        const cal = calculateSalary({
-            basicPay,
-            perDaySalary,
-            attendance,
-            leaves,
-        });
+    // 4️⃣ Calculate Salary
+    const cal = calculateSalary({
+      basicPay,
+      perDaySalary,
+      attendance,
+      leaves,
+    });
 
-        // 5️⃣ Create Salary Record
-        const salary = await Salary.create({
-            employeeId: empId,
-            employeeName: employee.ename,   // FIXED
-            month,
-            year,
+    // 5️⃣ Create Salary Record
+    const salary = await Salary.create({
+      employeeId: empId,
+      employeeName: employee.ename,   // FIXED
+      month,
+      year,
 
-            basicPay,
-            perDaySalary,
+      basicPay,
+      perDaySalary,
 
-            totalPresent: cal.present,
-            totalAbsent: cal.absent,
-            totalHalfDays: cal.halfDay,
-            paidLeaves: cal.paidLeaves,
-            unpaidLeaves: cal.unpaidLeaves,
-            totalWorkingHours: cal.totalWorkingHours,
-            lateDays: cal.lateDays,
+      totalPresent: cal.present,
+      totalAbsent: cal.absent,
+      totalHalfDays: cal.halfDay,
+      paidLeaves: cal.paidLeaves,
+      unpaidLeaves: cal.unpaidLeaves,
+      totalWorkingHours: cal.totalWorkingHours,
+      lateDays: cal.lateDays,
 
-            deductionDetails: cal.deductionDetails,
-            deductions: cal.totalDeductions,
-            netPay: cal.netPay,
+      deductionDetails: cal.deductionDetails,
+      deductions: cal.totalDeductions,
+      netPay: cal.netPay,
 
-            status: "Pending",
-        });
+      status: "Pending",
+    });
 
-        return res.json({
-            message: "Salary generated successfully",
-            salary,
-        });
+    return res.json({
+      message: "Salary generated successfully",
+      salary,
+    });
 
-    } catch (error) {
-        console.error("Generate Salary Error:", error);
-        res.status(500).json({ error: "Internal Server Error" });
-    }
+  } catch (error) {
+    console.error("Generate Salary Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 };
 
 
@@ -256,54 +256,54 @@ const generateSalary = async (req, res) => {
 //  MANUAL RE-CALCULATION OF SALARY
 // ==========================================================
 const regenSalary = async (req, res) => {
-    try {
-        const { empId } = req.params;
-        const { month, year } = req.body;
+  try {
+    const { empId } = req.params;
+    const { month, year } = req.body;
 
-        await Salary.findOneAndDelete({
-            employeeId: empId,
-            month,
-            year,
-        });
+    await Salary.findOneAndDelete({
+      employeeId: empId,
+      month,
+      year,
+    });
 
-        // Call generateSalary to create a new salary record
-        // Note: generateSalary expects month and year in req.body
-        req.body.month = month;
-        req.body.year = year;
-        return generateSalary(req, res);
+    // Call generateSalary to create a new salary record
+    // Note: generateSalary expects month and year in req.body
+    req.body.month = month;
+    req.body.year = year;
+    return generateSalary(req, res);
 
-    } catch (error) {
-        console.error("Regen Salary Error:", error);
-        res.status(500).json({ error: "Internal Server Error" });
-    }
+  } catch (error) {
+    console.error("Regen Salary Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 };
 
 
 
 const markSalaryPaid = async (req, res) => {
-    try {
-        const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-        if (!id) {
-            return res.status(400).json({ message: "Salary ID missing" });
-        }
-
-        const updated = await Salary.findByIdAndUpdate(
-            id,
-            { status: "Paid" },
-            { new: true }
-        );
-
-        if (!updated) {
-            return res.status(404).json({ message: "Salary record not found" });
-        }
-
-        res.json(updated);
-
-    } catch (error) {
-        console.error("Mark Paid Error:", error);
-        res.status(500).json({ error: "Server Error" });
+    if (!id) {
+      return res.status(400).json({ message: "Salary ID missing" });
     }
+
+    const updated = await Salary.findByIdAndUpdate(
+      id,
+      { status: "Paid" },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: "Salary record not found" });
+    }
+
+    res.json(updated);
+
+  } catch (error) {
+    console.error("Mark Paid Error:", error);
+    res.status(500).json({ error: "Server Error" });
+  }
 };
 
 
@@ -323,11 +323,11 @@ const getSalaryByMonth = async (req, res) => {
     }
 
     // 1️⃣ Get salary for the month
-      const salary = await Salary.findOne({
-        employeeId: empId,
-        month,
-        year: Number(year)
-      });
+    const salary = await Salary.findOne({
+      employeeId: empId,
+      month,
+      year: Number(year)
+    });
 
     // If salary is not accessible, return a placeholder
     if (salary && !salary.isAccessibleToEmployee) {
@@ -398,27 +398,28 @@ const getSalaryByMonth = async (req, res) => {
 };
 
 const getSalaryHistory = async (req, res) => {
-    try {
-        const { empId } = req.params;
-        const { year } = req.query;
+  try {
+    const { empId } = req.params;
+    const { year } = req.query;
 
-        const filter = { employeeId: empId };
-        if (year) filter.year = Number(year);
+    const filter = { employeeId: empId };
+    if (year) filter.year = Number(year);
 
-        const history = await Salary.find(filter).sort({ createdAt: -1 });
+    const history = await Salary.find(filter).sort({ createdAt: -1 });
 
-        res.json(history);
-    } catch (err) {
-        console.log("Salary History Error:", err);
-        res.status(500).json({ error: "Server Error" });
-    }
+    res.json(history);
+  } catch (err) {
+    console.log("Salary History Error:", err);
+    res.status(500).json({ error: "Server Error" });
+  }
 };
 
 
 
 
-const requestAccess   = async (req, res) => {
-  try {    const { empId } = req.params;
+const requestAccess = async (req, res) => {
+  try {
+    const { empId } = req.params;
     const { month, year } = req.body;
     const request = await SalaryAccessRequest.create({
       employeeId: empId,
@@ -510,7 +511,7 @@ const getAllSalaries = async (req, res) => {
     const employees = await SignUp.find({}, "ename employeeId givenSalary _id");
 
     const salaries = await Salary.find({ month, year })
-       .populate("employeeId", "ename employeeId givenSalary");
+      .populate("employeeId", "ename employeeId givenSalary");
 
     let rows = [];
 
@@ -541,32 +542,32 @@ const getAllSalaries = async (req, res) => {
 
 
 const bulkRegenerate = async (req, res) => {
-    try {
-        const { month, year } = req.body;
+  try {
+    const { month, year } = req.body;
 
-        const employees = await SignUp.find({});
+    const employees = await SignUp.find({});
 
-        for (const emp of employees) {
-            const fakeReq = {
-                params: { empId: emp._id },
-                body: { month, year },
-            };
+    for (const emp of employees) {
+      const fakeReq = {
+        params: { empId: emp._id },
+        body: { month, year },
+      };
 
-            await Salary.findOneAndDelete({
-                employeeId: emp._id,
-                month,
-                year,
-            });
+      await Salary.findOneAndDelete({
+        employeeId: emp._id,
+        month,
+        year,
+      });
 
-            await generateSalary(fakeReq, { json: () => {} });
-        }
-
-        res.json({ message: "All salaries regenerated" });
-
-    } catch (err) {
-        console.log("Bulk Regenerate Error:", err);
-        res.status(500).json({ error: "Failed to regenerate salaries" });
+      await generateSalary(fakeReq, { json: () => { } });
     }
+
+    res.json({ message: "All salaries regenerated" });
+
+  } catch (err) {
+    console.log("Bulk Regenerate Error:", err);
+    res.status(500).json({ error: "Failed to regenerate salaries" });
+  }
 };
 
 
@@ -721,39 +722,39 @@ const getAllEmployeesWithSalary = async (req, res) => {
 
 
 const adminGetAllSalary = async (req, res) => {
-    try {
-        const { month, year } = req.query;
+  try {
+    const { month, year } = req.query;
 
-        // 1️⃣ Get ALL employees
-        const employees = await SignUp.find().select(
-            "ename employeeId givenSalary"
-        );
+    // 1️⃣ Get ALL employees
+    const employees = await SignUp.find().select(
+      "ename employeeId givenSalary"
+    );
 
-        let finalData = [];
+    let finalData = [];
 
-        for (let emp of employees) {
-            // 2️⃣ Find salary for this employee for selected month/year
-            const salary = await Salary.findOne({
-                employeeId: emp._id,
-                month,
-                year,
-            });
+    for (let emp of employees) {
+      // 2️⃣ Find salary for this employee for selected month/year
+      const salary = await Salary.findOne({
+        employeeId: emp._id,
+        month,
+        year,
+      });
 
-            finalData.push({
-                employeeDbId: emp._id,
-                name: emp.ename,
-                code: emp.employeeId,
-                basicPay: emp.givenSalary,
-                salary: salary || null,
-            });
-        }
-
-        res.json(finalData);
-
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: "Server error" });
+      finalData.push({
+        employeeDbId: emp._id,
+        name: emp.ename,
+        code: emp.employeeId,
+        basicPay: emp.givenSalary,
+        salary: salary || null,
+      });
     }
+
+    res.json(finalData);
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: "Server error" });
+  }
 };
 
 
@@ -816,32 +817,32 @@ const getAllEmployeeSalary = async (req, res) => {
 
 // EXPORT ALL
 const regenerateSalary = async (req, res) => {
-    try {
-        const { empId } = req.params;
-        const { month, year } = req.body;
+  try {
+    const { empId } = req.params;
+    const { month, year } = req.body;
 
-        await Salary.findOneAndDelete({
-            employeeId: empId,
-            month,
-            year,
-        });
+    await Salary.findOneAndDelete({
+      employeeId: empId,
+      month,
+      year,
+    });
 
-        // Call generateSalary to create a new salary record
-        // Note: generateSalary expects month and year in req.body
-        req.body.month = month;
-        req.body.year = year;
-        return generateSalary(req, res);
+    // Call generateSalary to create a new salary record
+    // Note: generateSalary expects month and year in req.body
+    req.body.month = month;
+    req.body.year = year;
+    return generateSalary(req, res);
 
-    } catch (error) {
-        console.error("Regen Salary Error:", error);
-        res.status(500).json({ error: "Internal Server Error" });
-    }
+  } catch (error) {
+    console.error("Regen Salary Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 };
 
 module.exports = {
   generateSalary,
   bulkRegenerate,
-  getAllSalaries , 
+  getAllSalaries,
   regenSalary,
   getAllEmployeesWithSalary,
   getSalaryByMonth,
@@ -853,4 +854,4 @@ module.exports = {
   getAllEmployeeSalary,
   adminGetAllSalary
 };
- 
+
