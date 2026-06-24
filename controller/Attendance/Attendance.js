@@ -525,36 +525,41 @@ async function adminUpdateOfficeTiming(req, res) {
     const { employeeId } = req.params;
     const { officeStart, officeEnd, graceMinutes, dailyWorkingHours, screenshotInterval, inactivityTimeout } = req.body;
 
-    // 🔐 Only SuperAdmin (or Admin) should change these core settings
-    // In this app, superadmin role is often just 'superadmin' string
+    // 🔐 Only SuperAdmin (or Admin) can change these settings
     if (req.user?.role !== "superadmin" && req.user?.role !== "admin") {
-      // If we want to be strictly SuperAdmin:
-      // if (req.user?.role !== "superadmin") return res.status(403).json({ message: "Only SuperAdmin can change these settings" });
+       return res.status(403).json({ message: "Only Admin/SuperAdmin can change these settings" });
     }
 
     const emp = await SignUp.findById(employeeId);
     if (!emp) return res.status(404).json({ message: "Employee not found" });
 
+    const updateFields = {};
+    if (officeStart !== undefined) updateFields.officeStart = officeStart;
+    if (officeEnd !== undefined) updateFields.officeEnd = officeEnd;
+    if (graceMinutes !== undefined) updateFields.graceMinutes = graceMinutes;
+    if (dailyWorkingHours !== undefined) updateFields.dailyWorkingHours = dailyWorkingHours;
+    
+    if (screenshotInterval !== undefined) {
+      const val = parseInt(screenshotInterval);
+      if (!isNaN(val)) updateFields.screenshotInterval = val;
+    }
+    
+    if (inactivityTimeout !== undefined) {
+      const val = parseInt(inactivityTimeout);
+      if (!isNaN(val)) updateFields.inactivityTimeout = val;
+    }
+
     const updatedEmp = await SignUp.findByIdAndUpdate(
       employeeId,
-      {
-        $set: {
-          officeStart,
-          officeEnd,
-          graceMinutes,
-          dailyWorkingHours,
-          screenshotInterval: parseInt(screenshotInterval),
-          inactivityTimeout: parseInt(inactivityTimeout || 300)
-        }
-      },
+      { $set: updateFields },
       { new: true }
     );
 
     if (!updatedEmp) {
-      return res.status(404).json({ message: "Update failed, employee not found" });
+      return res.status(404).json({ message: "Update failed" });
     }
 
-    return res.json({ message: "Office timing updated", employee: updatedEmp });
+    return res.json({ message: "Settings updated successfully", employee: updatedEmp });
 
   } catch (err) {
     console.error("adminUpdateOfficeTiming error:", err);

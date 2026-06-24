@@ -4,10 +4,15 @@ const getEmpdatabyID = async (req, res) => {
     try {
         const id = req.params.employeeId;
 
-        let employee = await SignUp.findOne({ employeeId: id }).sort({ createdAt: -1 });
+        let employee = await SignUp.findOne({ employeeId: id })
+            .populate("department", "deptName")
+            .populate("service", "serviceName")
+            .sort({ createdAt: -1 });
 
         if (!employee) {
-            employee = await SignUp.findById(id);
+            employee = await SignUp.findById(id)
+                .populate("department", "deptName")
+                .populate("service", "serviceName");
         }
 
         if (!employee) {

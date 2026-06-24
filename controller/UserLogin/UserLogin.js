@@ -40,6 +40,7 @@ function sendLoginResponse(res, emp, token, extra = {}) {
     role: emp.role,
     userType: emp.userType || "employee",
     screenshotInterval: emp.screenshotInterval || 300,
+    inactivityTimeout: emp.inactivityTimeout || 300,
     ...extra,
   });
 }
@@ -407,8 +408,7 @@ const lockUserByInactivity = async (req, res) => {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
     await SignUp.findByIdAndUpdate(employeeId, {
-      isLocked: true,
-      unlockOTP: code,
+      $set: { isLocked: true, unlockOTP: code },
       $inc: { inactivityLogoutCount: 1 }
     });
 
@@ -432,27 +432,30 @@ const getLockedStatus = async (req, res) => {
 const generateManualCode = async (req, res) => {
   try {
     const { employeeId } = req.body;
-    console.log("Generating manual code for employeeId:", employeeId);
-    if (!employeeId) return res.status(400).json({ message: "employeeId is required" });
+    console.log(" [DEBUG] generateManualCode called with employeeId:", employeeId);
+    
+    if (!employeeId) {
+      console.log(" [DEBUG] employeeId is missing in request body");
+      return res.status(400).json({ message: "employeeId is required" });
+    }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log("New code generated:", code);
+    console.log(" [DEBUG] New code generated:", code);
 
     const updated = await SignUp.findByIdAndUpdate(employeeId, {
-      isLocked: true,
-      unlockOTP: code,
+      $set: { isLocked: true, unlockOTP: code },
       $inc: { inactivityLogoutCount: 1 }
     }, { new: true });
 
     if (!updated) {
-      console.log("Employee not found for id:", employeeId);
+      console.log(" [DEBUG] Employee not found in database for id:", employeeId);
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    console.log("Successfully updated employee with new code");
+    console.log(" [DEBUG] Successfully updated employee. New Count:", updated.inactivityLogoutCount);
     res.json({ message: "Code generated successfully", code });
   } catch (err) {
-    console.error("generateManualCode error:", err);
+    console.error(" [DEBUG] generateManualCode error:", err);
     res.status(500).json({ message: "Error generating code", error: err.message });
   }
 };

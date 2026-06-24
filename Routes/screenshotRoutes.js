@@ -6,7 +6,7 @@ const Screenshot = require("../model/ActivityLog/Screenshot");
 // Expects: { employeeId, imageBuffer, currentRoute }
 router.post("/upload", async (req, res) => {
   try {
-    const { employeeId, imageBuffer, currentRoute } = req.body;
+    const { employeeId, imageBuffer, currentRoute, trackedSeconds } = req.body;
 
     if (!employeeId || !imageBuffer) {
       return res.status(400).json({
@@ -43,8 +43,15 @@ router.post("/upload", async (req, res) => {
       });
 
       if (att) {
-        // Increment working hours by user's configured interval (seconds / 3600 = decimal hours)
-        att.workingHours = (att.workingHours || 0) + (intervalSec / 3600);
+        // Increment working hours by actual tracked elapsed time, capped at interval + buffer
+        let addedSec = trackedSeconds !== undefined && !isNaN(Number(trackedSeconds)) 
+          ? Number(trackedSeconds) 
+          : intervalSec;
+        
+        // Cap added seconds to interval + 60s to prevent huge jumps from anomalies
+        addedSec = Math.max(0, Math.min(addedSec, intervalSec + 60));
+
+        att.workingHours = (att.workingHours || 0) + (addedSec / 3600);
         att.lastActive = now;
         await att.save();
       }

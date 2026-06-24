@@ -428,7 +428,19 @@ Router.delete('/holiday/:id', deleteHoliday)
 
 
 // Update employee office timing (admin)
-Router.put('/updateOfficeTiming/:employeeId', adminUpdateOfficeTiming)
+// NOTE: uses the simple JWT-only auth (not authMiddleware which only looks up the User collection)
+// Role enforcement is done inside adminUpdateOfficeTiming controller itself.
+const simpleJwtAuth = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'No token' });
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ message: 'Invalid token' });
+  }
+};
+Router.put('/updateOfficeTiming/:employeeId', simpleJwtAuth, adminUpdateOfficeTiming)
 
 
 //Salary api
