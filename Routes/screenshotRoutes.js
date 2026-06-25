@@ -48,8 +48,24 @@ router.post("/upload", async (req, res) => {
           ? Number(trackedSeconds) 
           : intervalSec;
         
-        // Cap added seconds to interval + 60s to prevent huge jumps from anomalies
-        addedSec = Math.max(0, Math.min(addedSec, intervalSec + 60));
+        // 1. Cap added seconds to interval + 60s as a hard ceiling for anomalies
+        let maxAllowedSec = intervalSec + 60;
+        
+        // 2. Prevent duplicate-tracking across multiple tabs by ensuring we never add more time 
+        // than the actual physical time elapsed on the server since the last screenshot.
+        if (att.lastActive) {
+          const serverElapsedSec = (now.getTime() - new Date(att.lastActive).getTime()) / 1000;
+          if (serverElapsedSec >= 0) {
+            // Allow a small 5-second buffer for overlapping network latency
+            const actualMax = serverElapsedSec + 5;
+            if (actualMax < maxAllowedSec) {
+               maxAllowedSec = actualMax;
+            }
+          }
+        }
+
+        // 3. Final capping
+        addedSec = Math.max(0, Math.min(addedSec, maxAllowedSec));
 
         att.workingHours = (att.workingHours || 0) + (addedSec / 3600);
         att.lastActive = now;

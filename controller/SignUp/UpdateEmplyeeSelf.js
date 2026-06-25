@@ -11,7 +11,7 @@ const updateSelfProfile = async (req, res) => {
     let updates = { ...req.body };
 
     // whitelist fields
-    const allowedFields = ["ename","phoneNo","personal_email","address","emergencyContact","relation","qualification","lastExp","img","resumeFile","fatherName","motherName","dateOfBirth","gender","accountNo","bankName","ifscCode"];
+    const allowedFields = ["ename", "phoneNo", "personal_email", "address", "emergencyContact", "relation", "qualification", "lastExp", "img", "resumeFile", "fatherName", "motherName", "dateOfBirth", "gender", "accountNo", "bankName", "ifscCode"];
     Object.keys(updates).forEach(key => {
       if (!allowedFields.includes(key)) delete updates[key];
     });
@@ -50,7 +50,7 @@ const getEmployeeById = async (req, res) => {
       employee = await SignUp.findById(id)
         .populate('department')
         .populate('service');
-    } 
+    }
     else {
       // Otherwise treat it as custom employeeId
       employee = await SignUp.findOne({ employeeId: id })
@@ -69,4 +69,4 @@ const getEmployeeById = async (req, res) => {
   }
 };
 
-module.exports = { updateSelfProfile  , getEmployeeById};
+module.exports = { updateSelfProfile, getEmployeeById };

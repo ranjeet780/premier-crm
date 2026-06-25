@@ -409,7 +409,8 @@ const lockUserByInactivity = async (req, res) => {
 
     await SignUp.findByIdAndUpdate(employeeId, {
       $set: { isLocked: true, unlockOTP: code },
-      $inc: { inactivityLogoutCount: 1 }
+      $inc: { inactivityLogoutCount: 1 },
+      $push: { inactivityHistory: new Date() }
     });
 
     res.json({ message: "User locked successfully" });
@@ -444,7 +445,8 @@ const generateManualCode = async (req, res) => {
 
     const updated = await SignUp.findByIdAndUpdate(employeeId, {
       $set: { isLocked: true, unlockOTP: code },
-      $inc: { inactivityLogoutCount: 1 }
+      $inc: { inactivityLogoutCount: 1 },
+      $push: { inactivityHistory: new Date() }
     }, { new: true });
 
     if (!updated) {

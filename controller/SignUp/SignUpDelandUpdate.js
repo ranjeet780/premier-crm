@@ -3,8 +3,8 @@ const createRoleBasedNotification = require(
   "../../utils/createRoleBasedNotification"
 );
 const { releaseEmployeeId } = require("../../utils/employeeIdAllocator");
-  
- 
+
+
 
 // const updateUser = async (req, res) => {
 //   try {
@@ -103,7 +103,7 @@ const updateUser = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-    
+
 
 // const deleteUser = async (req, res) => {
 //     try {
@@ -166,4 +166,4 @@ const deleteUser = async (req, res) => {
 
 
 
-    module.exports = { updateUser, deleteUser };
+module.exports = { updateUser, deleteUser };

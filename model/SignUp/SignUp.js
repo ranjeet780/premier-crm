@@ -179,6 +179,7 @@ const SignUpSchema = new mongoose.Schema({
     unlockOTP: { type: String, default: null },
     screenshotInterval: { type: Number, default: 300 }, // in seconds
     inactivityLogoutCount: { type: Number, default: 0 },
+    inactivityHistory: [{ type: Date }],
     inactivityTimeout: { type: Number, default: 300 }, // in seconds
 
 }, { timestamps: true });

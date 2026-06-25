@@ -6,7 +6,7 @@ const createRoleBasedNotification = require(
   "../../utils/createRoleBasedNotification"
 );
 const path = require("path");
-  
+
 const extractNameFromResumeUrl = (url = "") => {
   const clean = String(url).split("?")[0].split("#")[0];
   const file = path.basename(clean);
@@ -122,7 +122,7 @@ const get_JobOpening = async (req, res) => {
       .populate("department", "deptName")
       .populate("service", "serviceName")
       .sort({ createdAt: -1 });
-    
+
     // Backward compatibility: ensure every job always has a serializable resume list
     const normalized = getData.map((jobDoc) => {
       const job = jobDoc.toObject();
