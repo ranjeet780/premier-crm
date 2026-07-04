@@ -6,6 +6,7 @@ const createRoleBasedNotification = require(
   "../../utils/createRoleBasedNotification"
 );
 const { claimReusableEmployeeId } = require("../../utils/employeeIdAllocator");
+const fileToBase64 = require("../../utils/fileToBase64");
 
 
 // const SignUpController = async (req, res) => {
@@ -78,7 +79,7 @@ const SignUpController = async (req, res) => {
       ename, dateOfBirth, gender, phoneNo,
       personal_email, official_email, password, fatherName,
       motherName, address, emergencyContact,
-      relation, bankName, accountNo, ifscCode,
+      relation, bankName, accountNo, ifscCode, bankAddress,
       accountHolderName, adarCardNo,
       panNo, qualification, lastExp, expWithPWT,
       department, service,
@@ -95,11 +96,19 @@ const SignUpController = async (req, res) => {
     }
 
     const resumeFile = req.files?.resumeFile
-      ? `${req.protocol}://${req.get("host")}/uploads/resumes/${req.files.resumeFile[0].filename}`
+      ? fileToBase64(req.files.resumeFile[0])
       : null;
 
     const img = req.files?.img
-      ? `${req.protocol}://${req.get("host")}/uploads/images/${req.files.img[0].filename}`
+      ? fileToBase64(req.files.img[0])
+      : null;
+
+    const aadhaarFile = req.files?.aadhaarFile
+      ? fileToBase64(req.files.aadhaarFile[0])
+      : null;
+
+    const panFile = req.files?.panFile
+      ? fileToBase64(req.files.panFile[0])
       : null;
 
     // ✅ robust duplicate checks (ignore empty optional personal email)
@@ -133,12 +142,12 @@ const SignUpController = async (req, res) => {
       official_email: officialEmailNorm,
       password: hashPassword, fatherName,
       motherName, address, emergencyContact,
-      relation, bankName, accountNo, ifscCode,
+      relation, bankName, accountNo, ifscCode, bankAddress,
       accountHolderName, adarCardNo,
       panNo, qualification, lastExp, expWithPWT,
       department, service,
       interviewDate, joiningDate, expectedSalary, givenSalary,
-      workingTime, resumeFile, img, userType, traineeDuration, jobId,
+      workingTime, resumeFile, img, aadhaarFile, panFile, userType, traineeDuration, jobId,
       ...(reusableEmployeeId ? { employeeId: reusableEmployeeId } : {})
     });
 

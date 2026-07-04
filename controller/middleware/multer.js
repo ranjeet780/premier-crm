@@ -16,6 +16,8 @@ const makeStorage = (folderName) =>
         else if (file.fieldname === "img") folder = "images";
         else if (file.fieldname === "addFile") folder = "projects";
         else if (file.fieldname === "attachments") folder = "proposals";
+        else if (file.fieldname === "aadhaarFile") folder = "aadhaar";
+        else if (file.fieldname === "panFile") folder = "pan";
       }
 
       const uploadPath = path.join(__dirname, "..", "uploads", folder);
@@ -34,10 +36,20 @@ const makeStorage = (folderName) =>
 
 // File filter: allow only certain file types
 const fileFilter = (req, file, cb) => {
-  const allowedExt = [".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".webp", ".avif"];
   const ext = path.extname(file.originalname).toLowerCase();
-  if (allowedExt.includes(ext)) cb(null, true);
-  else cb(new Error("Invalid file type"), false);
+  
+  if (file.fieldname === "aadhaarFile" || file.fieldname === "panFile") {
+    const allowedImageExt = [".jpg", ".jpeg", ".png"];
+    if (allowedImageExt.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Aadhar and PAN files must be in JPG or PNG format"), false);
+    }
+  } else {
+    const allowedExt = [".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".webp", ".avif"];
+    if (allowedExt.includes(ext)) cb(null, true);
+    else cb(new Error("Invalid file type"), false);
+  }
 };
 
 // ✅ Reusable Multer instance

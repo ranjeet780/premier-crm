@@ -63,6 +63,7 @@ const createSubscription = async (req, res) => {
       createdDate,
       expiringOn,
       status,
+      currency,
     } = req.body;
 
     if (!subscriber || !plan || !billingCycle || !paymentMethod || amount === undefined || !createdDate || !expiringOn) {
@@ -98,6 +99,7 @@ const createSubscription = async (req, res) => {
       createdDate: parsedCreatedDate,
       expiringOn: parsedExpiringOn,
       status: finalStatus,
+      currency: currency && ["INR", "USD", "EUR", "GBP"].includes(currency) ? currency : "INR",
     });
 
     return res.status(201).json(subscription);
@@ -277,6 +279,31 @@ const updateSubscriptionAddress = async (req, res) => {
   }
 };
 
+const updateSubscriptionCurrency = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { currency } = req.body;
+
+    if (!currency || !["INR", "USD", "EUR", "GBP"].includes(currency)) {
+      return res.status(400).json({ message: "Invalid or missing currency" });
+    }
+
+    const updated = await Subscription.findByIdAndUpdate(
+      id,
+      { currency },
+      { new: true, runValidators: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: "Subscription not found" });
+    }
+
+    return res.status(200).json(updated);
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to update subscription currency" });
+  }
+};
+
 const uploadSubscriptionSignature = async (req, res) => {
   try {
     const { id } = req.params;
@@ -370,15 +397,17 @@ const downloadSubscriptionPdf = async (req, res) => {
     const amountNumber = Number(subscription.amount || 0);
     const paidNumber = Number(subscription.paidAmount || 0);
     const balanceNumber = Math.max(amountNumber - paidNumber, 0);
-    const amountText = `Rs. ${amountNumber.toLocaleString("en-IN", {
+    const currency = subscription.currency || "INR";
+    const sym = { INR: "Rs.", USD: "$", EUR: "€", GBP: "£" }[currency] || "Rs.";
+    const amountText = `${sym} ${amountNumber.toLocaleString("en-IN", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
-    const paidText = `Rs. ${paidNumber.toLocaleString("en-IN", {
+    const paidText = `${sym} ${paidNumber.toLocaleString("en-IN", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
-    const balanceText = `Rs. ${balanceNumber.toLocaleString("en-IN", {
+    const balanceText = `${sym} ${balanceNumber.toLocaleString("en-IN", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
@@ -468,7 +497,7 @@ const downloadSubscriptionPdf = async (req, res) => {
     doc.text("Paid", totalBoxX, infoTop + 26);
     doc.text(paidText, totalBoxX + 70, infoTop + 26, { width: 75, align: "right" });
     doc.text("Tax", totalBoxX, infoTop + 46);
-    doc.text("Rs. 0.00", totalBoxX + 70, infoTop + 46, { width: 75, align: "right" });
+    doc.text(`${sym} 0.00`, totalBoxX + 70, infoTop + 46, { width: 75, align: "right" });
     doc.font("Helvetica-Bold");
     doc.text("Balance", totalBoxX, infoTop + 66);
     doc.text(balanceText, totalBoxX + 70, infoTop + 66, { width: 75, align: "right" });
@@ -512,6 +541,7 @@ module.exports = {
   addSubscriptionPayment,
   deleteSubscription,
   updateSubscriptionAddress,
+  updateSubscriptionCurrency,
   uploadSignatureMiddleware,
   uploadSubscriptionSignature,
   removeSubscriptionSignature,

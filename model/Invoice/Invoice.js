@@ -50,6 +50,11 @@ const invoiceSchema = new mongoose.Schema({
     enum: ["UPI", "Net Banking", "Debit Card", "Credit Card", "Cash", "Online"],
     default: "UPI",
   },
+  currency: {
+    type: String,
+    enum: ["INR", "USD", "EUR", "GBP", "AUD", "CAD", "SGD"],
+    default: "INR",
+  },
 
   // ✅ new array to store multiple payments
   payments: [paymentSchema],

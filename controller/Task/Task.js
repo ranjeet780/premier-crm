@@ -221,6 +221,10 @@ const updateTask = async (req, res) => {
     const taskId = req.params.id;
     const body = req.body;
 
+    if (body.dueDate) {
+      body.reminder_offsets_sent = [];
+    }
+
     const updatedTask = await Task.findByIdAndUpdate(
       taskId,
       body,

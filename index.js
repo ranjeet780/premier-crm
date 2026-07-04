@@ -8,6 +8,7 @@
   require("./cronJobs/autoAbsentCron");
   require("./cronJobs/autoLeaveMarkCron");
   require("./cronJobs/serviceSubscriptionReminderCron");
+  require("./cronJobs/taskDeadlineReminderCron");
   //neeww add
   // const { initSocket } = require("./socket");
 const notificationRoutes = require("./Routes/notificationRoutes");

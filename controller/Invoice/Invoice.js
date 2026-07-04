@@ -160,6 +160,7 @@ const createInvoice = async (req, res) => {
       dueDate,
       paymentMethod,
       sendNow,
+      currency,
     } = req.body;
 
     /* ---------- BASIC VALIDATION ---------- */
@@ -220,6 +221,7 @@ const createInvoice = async (req, res) => {
       invoiceNumber: "INV-" + Date.now(),
       dueDate,
       paymentMethod: paymentMethod || "UPI",
+      currency: currency || "INR",
       totalAmount,
       subTotalAmount,
       companySnapshot: {
@@ -263,9 +265,10 @@ const createInvoice = async (req, res) => {
 
     /* ---------- SEND EMAIL ---------- */
     await transporter.sendMail({
-      from: `"${company.name}" <${company.email}>`,
+      from: `"${company.name}" <${process.env.EMAIL_USER}>`,
+      replyTo: company.email,
       to: clientEmail,
-      subject: `Invoice #${invoice.invoiceNumber} (₹${totalAmount})`,
+      subject: `Invoice #${invoice.invoiceNumber} (${currency || 'INR'} ${totalAmount})`,
       html: `
       <div style="font-family: Arial, sans-serif; max-width: 660px; margin: auto; border: 1px solid #eee; padding: 32px; border-radius: 12px;">
 
@@ -283,18 +286,18 @@ const createInvoice = async (req, res) => {
           </thead>
           <tbody>
             ${normalizedProjects
-              .map(
-                (p) => `
+          .map(
+            (p) => `
                 <tr>
                   <td style="border:1px solid #ccc; padding:10px;">${p.projectName}</td>
-                  <td style="border:1px solid #ccc; padding:10px; text-align:right;">₹${p.amount.toLocaleString()}</td>
+                  <td style="border:1px solid #ccc; padding:10px; text-align:right;">${currency || 'INR'} ${p.amount.toLocaleString()}</td>
                 </tr>
               `
-              )
-              .join("")}
+          )
+          .join("")}
             <tr>
               <td style="border:1px solid #ccc; padding:10px; font-weight:bold;">Total</td>
-              <td style="border:1px solid #ccc; padding:10px; text-align:right; font-weight:bold;">₹${totalAmount.toLocaleString()}</td>
+              <td style="border:1px solid #ccc; padding:10px; text-align:right; font-weight:bold;">${currency || 'INR'} ${totalAmount.toLocaleString()}</td>
             </tr>
           </tbody>
         </table>
@@ -491,6 +494,7 @@ const updateInvoice = async (req, res) => {
     if (payload.dueDate !== undefined) invoice.dueDate = payload.dueDate;
     if (payload.date !== undefined) invoice.date = payload.date;
     if (payload.status !== undefined) invoice.status = payload.status;
+    if (payload.currency !== undefined) invoice.currency = payload.currency;
 
     if (Array.isArray(payload.projects)) {
       invoice.projects = payload.projects.map((p) => ({
@@ -552,12 +556,13 @@ const sendInvoice = async (req, res) => {
     const projectsHtml = (invoice.projects || [])
       .map(
         (p) =>
-          `<tr><td style="padding:8px;border:1px solid #ddd;">${p.projectName || p.name || "Project"}</td><td style="padding:8px;border:1px solid #ddd;text-align:right;">Rs ${Number(p.amount || 0).toLocaleString()}</td></tr>`
+          `<tr><td style="padding:8px;border:1px solid #ddd;">${p.projectName || p.name || "Project"}</td><td style="padding:8px;border:1px solid #ddd;text-align:right;">${invoice.currency || 'INR'} ${Number(p.amount || 0).toLocaleString()}</td></tr>`
       )
       .join("");
 
     await transporter.sendMail({
-      from: `"${company.name || "Company"}" <${company.email}>`,
+      from: `"${company.name || "Company"}" <${process.env.EMAIL_USER}>`,
+      replyTo: company.email,
       to: invoice.clientEmail,
       subject: `Invoice #${invoice.invoiceNumber}`,
       html: `
@@ -568,9 +573,9 @@ const sendInvoice = async (req, res) => {
             ${projectsHtml}
             <tr>
               <td style="padding:8px;border:1px solid #ddd"><b>Total</b></td>
-              <td style="padding:8px;border:1px solid #ddd;text-align:right"><b>Rs ${Number(
-                invoice.totalAmount || 0
-              ).toLocaleString()}</b></td>
+              <td style="padding:8px;border:1px solid #ddd;text-align:right"><b>${invoice.currency || 'INR'} ${Number(
+        invoice.totalAmount || 0
+      ).toLocaleString()}</b></td>
             </tr>
           </table>
         </div>

@@ -67,10 +67,20 @@ const taskSchema = new mongoose.Schema(
       }
     ],
 
+    reminder_offsets_sent: { type: [Number], default: [] },
+
     TaskId: { type: String }
   },
   { timestamps: true }
 );
+
+// Reset reminder offsets if due date is modified
+taskSchema.pre("save", function (next) {
+  if (this.isModified("dueDate")) {
+    this.reminder_offsets_sent = [];
+  }
+  next();
+});
 
 // AUTO GENERATE TaskId
 taskSchema.pre("save", async function (next) {

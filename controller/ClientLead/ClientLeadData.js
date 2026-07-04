@@ -22,7 +22,8 @@ const Gen_ClientLead = async (req, res) => {
       department, service, project_type,
       project_price, start_date, deadline,
       startProjectDate, date, status, assign,
-      userType
+      userType, accountNo, ifscCode, gstNumber,
+      bankName, accountHolderName, adarCardNo, panNo
     } = req.body;
 
     // ✅ check duplicate by email
@@ -36,7 +37,8 @@ const Gen_ClientLead = async (req, res) => {
       department, service, project_type,
       project_price, start_date, deadline,
       startProjectDate, date, status,
-      assign, userType
+      assign, userType, accountNo, ifscCode, gstNumber,
+      bankName, accountHolderName, adarCardNo, panNo
     });
 
     const savedLead = await newClient.save();

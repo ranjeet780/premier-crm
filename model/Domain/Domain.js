@@ -9,7 +9,7 @@ const DomainSchema = new mongoose.Schema(
     },
     url: {
       type: String,
-      required: true,
+      required: function() { return this.productType !== 'email'; },
       trim: true,
     },
     plan: {
@@ -32,7 +32,7 @@ const DomainSchema = new mongoose.Schema(
     },
     platform: {
       type: String,
-      required: true,
+      required: function() { return this.productType !== 'email'; },
       trim: true,
     },
     actualAmount: {
@@ -48,6 +48,11 @@ const DomainSchema = new mongoose.Schema(
       enum: ["Paid", "Unpaid"],
       default: "Unpaid",
     },
+    productType: {
+      type: String,
+      enum: ["domain", "hosting", "email"],
+      default: "domain"
+    }
   },
   { timestamps: true }
 );

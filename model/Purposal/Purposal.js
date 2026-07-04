@@ -6,6 +6,7 @@ const ProposalSchema = new mongoose.Schema({
   title: String,
   services: [{ id: String, name: String, price: Number }],
   description: String,
+  companyDescription: String,
   category: [{ type: String }],
   price: Number,
   terms: String,

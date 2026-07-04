@@ -30,7 +30,7 @@ const { updateVacancy, selectResumeForJob, unselectResumeForJob, blockResumeForJ
 const { getEmpdatabyID, getEmployeesByDepartment } = require("../controller/Employee/getEmpbyId");
 const { ConvertToClient, updateStatus } = require("../controller/ClientLead/ConverttoClient");
 const { updateClientUser, deleteClientUser } = require("../controller/ClientLead/UpdateClientLead");
-const { getMonthlyAttendance, getTodayAttendance, markAttendanceCheckOut, getMonthlyAttendanceByAdmin, adminUpdateOfficeTiming } = require("../controller/Attendance/Attendance");
+const { getMonthlyAttendance, getTodayAttendance, markAttendanceCheckOut, getMonthlyAttendanceByAdmin, adminUpdateOfficeTiming, startBreak, resumeBreak } = require("../controller/Attendance/Attendance");
 const { markAttendance } = require("../controller/Attendance/markAttendanceController");
 const { UserLogin, UserLogout, getWorkingHours, forgotPassword, resetUserPassword, lockUserByInactivity, getLockedStatus, generateManualCode } = require("../controller/UserLogin/UserLogin");
 const { markAttendanceOnLogin } = require("../controller/UserLogin/attendanceService");
@@ -65,6 +65,7 @@ const {
   addSubscriptionPayment,
   deleteSubscription,
   updateSubscriptionAddress,
+  updateSubscriptionCurrency,
   uploadSignatureMiddleware,
   uploadSubscriptionSignature,
   removeSubscriptionSignature,
@@ -121,6 +122,8 @@ Router.post(
   uploadTo().fields([
     { name: "resumeFile", maxCount: 1 },
     { name: "img", maxCount: 1 },
+    { name: "aadhaarFile", maxCount: 1 },
+    { name: "panFile", maxCount: 1 },
   ]),
   SignUpController
 );
@@ -129,8 +132,9 @@ Router.post(
 Router.put("/updateSelfId/:id", uploadTo().fields([
   { name: "img", maxCount: 1 },
   { name: "resumeFile", maxCount: 1 },
+  { name: "aadhaarFile", maxCount: 1 },
+  { name: "panFile", maxCount: 1 },
 ]), updateSelfProfile
-
 )
 
 
@@ -152,6 +156,8 @@ Router.put(
   uploadTo().fields([
     { name: "resumeFile", maxCount: 1 },
     { name: "img", maxCount: 1 },
+    { name: "aadhaarFile", maxCount: 1 },
+    { name: "panFile", maxCount: 1 },
   ]),
   updateUser
 )
@@ -335,6 +341,7 @@ Router.get('/subscriptions/:id', getSubscriptionById)
 Router.put('/subscriptions/:id/status', updateSubscriptionStatus)
 Router.post('/subscriptions/:id/addPayment', addSubscriptionPayment)
 Router.put('/subscriptions/:id/address', updateSubscriptionAddress)
+Router.put('/subscriptions/:id/currency', updateSubscriptionCurrency)
 Router.put('/subscriptions/:id/signature', uploadSignatureMiddleware, uploadSubscriptionSignature)
 Router.post('/subscriptions/:id/signature', uploadSignatureMiddleware, uploadSubscriptionSignature)
 Router.delete('/subscriptions/:id/signature', removeSubscriptionSignature)
@@ -401,6 +408,8 @@ Router.get('/employee/IsHoliday', isHoliday)
 
 
 Router.post("/checkout", markAttendanceCheckOut);
+Router.post("/break/start", startBreak);
+Router.post("/break/resume", resumeBreak);
 Router.get('/getMonthlyAttandenceByAdmin', getMonthlyAttendanceByAdmin)
 
 

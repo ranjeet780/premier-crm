@@ -13,7 +13,7 @@ const getReportsSummary = async (req, res) => {
       { $group: { _id: "$status", count: { $sum: 1 } } },
     ]);
 
-  
+
     const partialInvoices = await Invoice.find({ status: { $in: ["Partial", "Pending"] } });
 
     const totalPendingPartialPayment = partialInvoices.reduce((sum, invoice) => {
@@ -35,6 +35,16 @@ const getReportsSummary = async (req, res) => {
       return acc;
     }, {});
 
+    // Fetch detailed lists
+    const proposalsList = await Proposal.find()
+      .populate("clientId", "leadName emailId phoneNo")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const invoicesList = await Invoice.find()
+      .sort({ date: -1 })
+      .lean();
+
     return res.json({
       proposals: {
         total: Object.values(proposalsSummary).reduce((a, b) => a + b, 0),
@@ -50,6 +60,8 @@ const getReportsSummary = async (req, res) => {
         pending: invoicesSummary["Pending"] || 0,
         partialPendingAmount: totalPendingPartialPayment,
       },
+      proposalsList,
+      invoicesList,
     });
   } catch (error) {
     console.error("Error fetching report summary:", error);
@@ -58,3 +70,4 @@ const getReportsSummary = async (req, res) => {
 };
 
 module.exports = { getReportsSummary };
+

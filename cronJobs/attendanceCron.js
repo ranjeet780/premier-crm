@@ -4,26 +4,12 @@ const SignUp = require("../model/SignUp/SignUp");
 const Attendance = require("../model/Attendance/Attendance");
 const Leave = require("../model/userPannel/Leaves/Leaves");
 const Holiday = require("../model/Holiday/Holiday");
+const Notification = require("../model/Notification/Notification");
+const NotificationForAll = require("../model/Notification/NotificationForAll");
+const { getIO } = require("../socket");
+const { formatDateIST, formatTime, parseISTLocalToUTC } = require("../utils/dateUtils");
 
-function getISTDate() {
-  const dateIST = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-  return new Date(dateIST);
-}
-
-function formatDate(date) {
-  const d = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  return d.toISOString().split("T")[0];
-}
-
-function hhmmToISTDate(dateStr /* "YYYY-MM-DD" */, hhmm /* "09:30" */) {
-  const [h, m] = hhmm.split(':').map(Number);
-  const dt = new Date(`${dateStr}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`);
-  const inst = new Date(dt.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  return inst;
-}
-
-async function propagateHolidayToAttendance(holidayDate, holidayObj) {
-  const dateOnly = new Date(holidayDate);
+async function propagateHolidayToAttendance(dateOnly, holidayObj) {
   const employees = await SignUp.find({ isActive: true });
 
   for (const emp of employees) {
@@ -53,9 +39,9 @@ async function propagateHolidayToAttendance(holidayDate, holidayObj) {
 // Cron: every 15 minutes — mark absent after officeEnd passes, skip leaves and holidays
 cron.schedule('*/15 * * * *', async () => {
   try {
-    const nowIST = getISTDate();
-    const dateStr = formatDate(nowIST);
-    const dateOnly = new Date(dateStr);
+    const now = new Date();
+    const dateStr = formatDateIST(now);
+    const dateOnly = parseISTLocalToUTC(dateStr, "00:00:00");
 
     // 1) If admin added a holiday today, propagate it
     const todaysHoliday = await Holiday.findOne({ date: dateOnly });
@@ -96,8 +82,8 @@ cron.schedule('*/15 * * * *', async () => {
 
       // check officeEnd passed?
       const officeEnd = emp.officeEnd || "18:30";
-      const officeEndDt = hhmmToISTDate(dateStr, officeEnd);
-      if (nowIST < officeEndDt) continue; // still office hours
+      const officeEndDt = parseISTLocalToUTC(dateStr, `${officeEnd}:00`);
+      if (now < officeEndDt) continue; // still office hours
 
       // now office ended for this employee; if attendance not present, mark Absent
       const att = await Attendance.findOne({ empId: emp._id, date: dateOnly });
@@ -123,4 +109,114 @@ cron.schedule('*/15 * * * *', async () => {
   timezone: "Asia/Kolkata"
 });
 
+// Cron: every 1 minute — check for employees on break for > 40 minutes, auto-logout, and notify administrators
+cron.schedule('* * * * *', async () => {
+  try {
+    const now = new Date();
+    // Find all active attendance records where breakStatus is "On Break" and currentBreakStartRaw exists
+    const activeBreaks = await Attendance.find({
+      breakStatus: "On Break",
+      currentBreakStartRaw: { $ne: null }
+    }).populate("empId");
+
+    for (const att of activeBreaks) {
+      if (!att.empId) continue;
+
+      const breakStart = new Date(att.currentBreakStartRaw);
+      const elapsedMinutes = (now.getTime() - breakStart.getTime()) / (1000 * 60);
+
+      // Exceeded 40 minutes?
+      if (elapsedMinutes > 40) {
+        console.log(`[Auto-Logout Triggered] Employee ${att.empId.ename} has been on break for ${elapsedMinutes.toFixed(2)} mins. Logging out.`);
+
+        // 1. End active break session
+        const durationMinutes = elapsedMinutes;
+        const endStr = formatTime(now);
+
+        att.breaks.push({
+          start: att.breakStart,
+          end: endStr,
+          duration: Number(durationMinutes.toFixed(2))
+        });
+
+        att.totalBreakDuration = (att.totalBreakDuration || 0) + durationMinutes;
+        att.workingHours = (att.workingHours || 0) + (durationMinutes / 60);
+
+        att.breakEnd = endStr;
+        att.currentBreakStartRaw = null;
+        att.breakStatus = "Working"; // set back to Working internally
+
+        // 2. Perform checkout (auto logout)
+        att.check_out = endStr;
+        att.remark = (att.remark ? att.remark + " | " : "") + "Auto-logged out: break exceeded 40 minutes limit.";
+        await att.save();
+
+        // 3. Prepare display values
+        // Parse IST times for the notification body (India timezone has UTC+5:30)
+        const breakStartIST = new Date(breakStart.getTime() + (5.5 * 60 * 60 * 1000)).toISOString().replace("T", " ").slice(0, 19);
+        const logoutTimeIST = new Date(now.getTime() + (5.5 * 60 * 60 * 1000)).toISOString().replace("T", " ").slice(0, 19);
+        const durationStr = `${durationMinutes.toFixed(1)} mins`;
+
+        // 4. Find a system/admin user to act as creator of notifications
+        const systemAdmin = await SignUp.findOne({ role: "superadmin" }) || await SignUp.findOne({ role: "admin" }) || att.empId;
+
+        // 5. Create notification in NotificationForAll (for administrative users dashboard)
+        const adminNotification = await NotificationForAll.create({
+          type: "BREAK_EXCEEDED_AUTO_LOGOUT",
+          title: "Break Exceeded - Auto Logout",
+          message: `Employee ${att.empId.ename} exceeded the maximum allowed break time (40 mins). Break Start: ${breakStartIST}, Total Duration: ${durationStr}, Logout Timestamp: ${logoutTimeIST}`,
+          module: "attendance",
+          refId: att._id,
+          createdByUser: systemAdmin._id,
+          createdByRole: "system",
+          visibleToRoles: ["admin", "superadmin"]
+        });
+
+        // 6. Create notification in Notification (for SystemNotificationBell and NavbarNotification admins)
+        const globalNotification = await Notification.create({
+          title: "Break Exceeded - Auto Logout",
+          body: `Employee ${att.empId.ename} exceeded the maximum allowed break time (40 mins). Break Start: ${breakStartIST}, Total Duration: ${durationStr}, Logout Timestamp: ${logoutTimeIST}`,
+          category: "Alert",
+          priority: "High",
+          allUsers: true,
+          status: "sent"
+        });
+
+        // 7. Socket.IO emissions
+        let io;
+        try {
+          io = getIO();
+        } catch (socketErr) {
+          console.warn("Socket.io not initialized yet, skipping real-time notifications");
+        }
+
+        if (io) {
+          // Send notification to all admin/superadmin roles
+          ["admin", "superadmin"].forEach((role) => {
+            io.to(`role:${role}`).emit("new-notification", {
+              ...adminNotification.toObject(),
+              isRead: false
+            });
+            // Also notify the active admin channel namespace
+            io.to("admins").emit("new-notification", {
+              ...adminNotification.toObject(),
+              isRead: false
+            });
+          });
+
+          // Force logout the active employee client session
+          io.to(`user:${att.empId._id}`).emit("force-logout", {
+            reason: "Your break exceeded 40 minutes, and you have been automatically logged out."
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error in break checking cron job:", err);
+  }
+}, {
+  timezone: "Asia/Kolkata"
+});
+
 module.exports = {}; // nothing to export, started by requiring this file
+

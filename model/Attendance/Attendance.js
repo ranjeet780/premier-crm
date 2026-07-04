@@ -27,6 +27,23 @@ const AttendanceSchema = new mongoose.Schema({
     default: "Present"
   },
 
+  breakStart: { type: String, default: null },
+  breakEnd: { type: String, default: null },
+  totalBreakDuration: { type: Number, default: 0 },
+  currentBreakStartRaw: { type: Date, default: null },
+  breakStatus: {
+    type: String,
+    enum: ["Working", "On Break"],
+    default: "Working"
+  },
+  breaks: [
+    {
+      start: { type: String, required: true },
+      end: { type: String, required: true },
+      duration: { type: Number, required: true }
+    }
+  ],
+
   lastActive: { type: Date, default: null },
 
   remark: { type: String, default: null },

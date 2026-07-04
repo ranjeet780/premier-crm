@@ -6,6 +6,16 @@ const Holiday = require("../../model/Holiday/Holiday");
 const mongoose = require('mongoose');
 const { parseISTLocalToUTC, formatTime } = require('../../utils/dateUtils');
 
+function getBreakDurationMinutes(startRaw, checkOutTimeStr) {
+  if (!startRaw || !checkOutTimeStr) return 0;
+  const [h, m, s] = checkOutTimeStr.split(":").map(Number);
+  const checkOutDate = new Date(startRaw);
+  checkOutDate.setHours(h, m || 0, s || 0, 0);
+  const diffMs = checkOutDate.getTime() - new Date(startRaw).getTime();
+  const minutes = Math.max(0, diffMs / (1000 * 60));
+  return Number(minutes.toFixed(2));
+}
+
 
 /* ---------------------------
    markAttendanceCheckOut
@@ -41,7 +51,6 @@ const markAttendanceCheckOut = async (req, res) => {
   }
 
   attendance.check_out = formatTime(now);
-  // Working hours are now tracked via screen screenshots incrementally.
 
   await attendance.save();
 
@@ -289,11 +298,35 @@ const getMonthlyAttendance = async (req, res) => {
             ? "Present"
             : att.status || "-";
 
+        let workingHours = att.workingHours || 0;
+        let totalBreakDuration = att.totalBreakDuration || 0;
+        let breaks = att.breaks ? [...att.breaks] : [];
+        let breakEnd = att.breakEnd;
+
+        if (att.breakStatus === "On Break" && att.currentBreakStartRaw && att.check_out) {
+          const lastBreakMinutes = getBreakDurationMinutes(att.currentBreakStartRaw, att.check_out);
+          if (lastBreakMinutes > 0) {
+            totalBreakDuration += lastBreakMinutes;
+            workingHours += (lastBreakMinutes / 60);
+            breaks.push({
+              start: att.breakStart,
+              end: att.check_out,
+              duration: lastBreakMinutes
+            });
+            breakEnd = att.check_out;
+          }
+        }
+
         row.status = effectiveStatus;
         row.check_in = att.check_in;
         row.check_out = att.check_out;
-        row.workingHours = att.workingHours || 0;
+        row.workingHours = Number(workingHours.toFixed(2));
         row.isLateMinutes = att.isLateMinutes || 0;
+        row.breakStart = att.breakStart || null;
+        row.breakEnd = breakEnd || null;
+        row.totalBreakDuration = totalBreakDuration;
+        row.breakStatus = att.breakStatus || "Working";
+        row.breaks = breaks;
 
         const s = effectiveStatus.toLowerCase();
         if (s === "present") summary.present++;
@@ -467,12 +500,36 @@ const getMonthlyAttendanceByAdmin = async (req, res) => {
               ? "Present"
               : att.status;
 
+          let workingHours = att.workingHours || 0;
+          let totalBreakDuration = att.totalBreakDuration || 0;
+          let breaks = att.breaks ? [...att.breaks] : [];
+          let breakEnd = att.breakEnd;
+
+          if (att.breakStatus === "On Break" && att.currentBreakStartRaw && att.check_out) {
+            const lastBreakMinutes = getBreakDurationMinutes(att.currentBreakStartRaw, att.check_out);
+            if (lastBreakMinutes > 0) {
+              totalBreakDuration += lastBreakMinutes;
+              workingHours += (lastBreakMinutes / 60);
+              breaks.push({
+                start: att.breakStart,
+                end: att.check_out,
+                duration: lastBreakMinutes
+              });
+              breakEnd = att.check_out;
+            }
+          }
+
           row.status = effectiveStatus;
           row.check_in = att.check_in;
           row.check_out = att.check_out;
-          row.workingHours = att.workingHours;
+          row.workingHours = Number(workingHours.toFixed(2));
           row.isLateMinutes = att.isLateMinutes;
           row.lastActive = att.lastActive || null;
+          row.breakStart = att.breakStart || null;
+          row.breakEnd = breakEnd || null;
+          row.totalBreakDuration = totalBreakDuration;
+          row.breakStatus = att.breakStatus || "Working";
+          row.breaks = breaks;
 
           const s = (effectiveStatus || '').toLowerCase();
           if (s === "present") summary.present++;
@@ -567,6 +624,112 @@ async function adminUpdateOfficeTiming(req, res) {
   }
 }
 
+/* ---------------------------
+   startBreak
+----------------------------*/
+const startBreak = async (req, res) => {
+  try {
+    const { employeeId } = req.body;
+    if (!employeeId) return res.status(400).json({ message: "employeeId is required" });
+
+    const emp = await SignUp.findById(employeeId);
+    if (!emp) return res.status(404).json({ message: "Employee not found" });
+
+    const now = new Date();
+    const dateKey = formatDateIST(now);
+    const startOfDay = parseISTLocalToUTC(dateKey, "00:00:00");
+    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+    const attendance = await Attendance.findOne({
+      empId: emp._id,
+      date: { $gte: startOfDay, $lt: endOfDay }
+    });
+
+    if (!attendance || !attendance.check_in) {
+      return res.status(400).json({ message: "You must check-in first before starting a break." });
+    }
+
+    if (attendance.breakStatus === "On Break") {
+      return res.status(400).json({ message: "You are already on break." });
+    }
+
+    const timeStr = formatTime(now);
+    attendance.breakStart = timeStr;
+    attendance.currentBreakStartRaw = now;
+    attendance.breakStatus = "On Break";
+
+    await attendance.save();
+
+    res.json({
+      message: "Break started successfully",
+      attendance
+    });
+  } catch (err) {
+    console.error("startBreak error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+/* ---------------------------
+   resumeBreak
+----------------------------*/
+const resumeBreak = async (req, res) => {
+  try {
+    const { employeeId } = req.body;
+    if (!employeeId) return res.status(400).json({ message: "employeeId is required" });
+
+    const emp = await SignUp.findById(employeeId);
+    if (!emp) return res.status(404).json({ message: "Employee not found" });
+
+    const now = new Date();
+    const dateKey = formatDateIST(now);
+    const startOfDay = parseISTLocalToUTC(dateKey, "00:00:00");
+    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+    const attendance = await Attendance.findOne({
+      empId: emp._id,
+      date: { $gte: startOfDay, $lt: endOfDay }
+    });
+
+    if (!attendance || !attendance.check_in) {
+      return res.status(400).json({ message: "No active attendance session found." });
+    }
+
+    if (attendance.breakStatus !== "On Break" || !attendance.currentBreakStartRaw) {
+      return res.status(400).json({ message: "You are not currently on break." });
+    }
+
+    const startRaw = new Date(attendance.currentBreakStartRaw);
+    const durationMs = now.getTime() - startRaw.getTime();
+    const durationMinutes = Math.max(0, durationMs / (1000 * 60));
+
+    const endStr = formatTime(now);
+
+    attendance.breaks.push({
+      start: attendance.breakStart,
+      end: endStr,
+      duration: Number(durationMinutes.toFixed(2))
+    });
+
+    attendance.totalBreakDuration = (attendance.totalBreakDuration || 0) + durationMinutes;
+    attendance.workingHours = (attendance.workingHours || 0) + (durationMinutes / 60);
+
+    attendance.breakEnd = endStr;
+    attendance.currentBreakStartRaw = null;
+    attendance.breakStatus = "Working";
+
+    await attendance.save();
+
+    res.json({
+      message: "Resumed work successfully",
+      attendance
+    });
+  } catch (err) {
+    console.error("resumeBreak error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
 module.exports = {
   getMonthlyAttendanceByAdmin,
 
@@ -574,4 +737,6 @@ module.exports = {
   getTodayAttendance,
   getMonthlyAttendance,
   adminUpdateOfficeTiming,
+  startBreak,
+  resumeBreak
 };

@@ -1,17 +1,15 @@
 const cron = require("node-cron");
 const Attendance = require("../model/Attendance/Attendance");
 const SignUp = require("../model/SignUp/SignUp");
+const { formatDateIST, parseISTLocalToUTC } = require("../utils/dateUtils");
 
 cron.schedule("59 23 * * *", async () => {
   try {
     console.log("⏳ Running Auto-Absent Cron...");
 
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = today.getMonth() + 1;
-    const dd = today.getDate();
-
-    const dateOnly = new Date(`${yyyy}-${mm}-${dd}`);
+    const now = new Date();
+    const dateStr = formatDateIST(now);
+    const dateOnly = parseISTLocalToUTC(dateStr, "00:00:00");
 
     const employees = await SignUp.find({ isActive: true });
 
@@ -42,3 +40,4 @@ cron.schedule("59 23 * * *", async () => {
 });
 
 module.exports = {};
+

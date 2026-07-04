@@ -86,6 +86,7 @@ const monthToNumber = {
 const calculateSalary = ({
   basicPay = 0,
   perDaySalary = 0,
+  dailyWorkingHours = 9,
   attendance = [],
   leaves = [],
 }) => {
@@ -94,6 +95,7 @@ const calculateSalary = ({
   let halfDay = 0;
   let paidLeaves = 0;
   let unpaidLeaves = 0;
+  let shortLeavesCount = 0;
   let totalWorkingHours = 0;
   let lateDays = 0;
 
@@ -121,7 +123,9 @@ const calculateSalary = ({
     const diffTime = Math.abs(to - from);
     const days = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-    if (leave.leave_type === "Paid") {
+    if (leave.leave_type === "Short Leave" || leave.leave_category === "Short Leave") {
+      shortLeavesCount += 1;
+    } else if (leave.leave_type === "Paid") {
       paidLeaves += days;
     } else {
       unpaidLeaves += days;
@@ -133,12 +137,15 @@ const calculateSalary = ({
   const halfDayDeduction = (halfDay * perDaySalary) / 2;
   const unpaidLeaveDeduction = unpaidLeaves * perDaySalary;
   const lateDeduction = lateDays * (perDaySalary * 0.1);
+  const perHourSalary = perDaySalary / dailyWorkingHours;
+  const shortLeaveDeduction = shortLeavesCount * perHourSalary; // 1 hour basis
 
   const totalDeductions =
     absentDeduction +
     halfDayDeduction +
     unpaidLeaveDeduction +
-    lateDeduction;
+    lateDeduction +
+    shortLeaveDeduction;
 
   const netPay = Math.max(0, basicPay - totalDeductions);
 
@@ -148,6 +155,7 @@ const calculateSalary = ({
     halfDay,
     paidLeaves,
     unpaidLeaves,
+    shortLeavesCount,
     totalWorkingHours,
     lateDays,
     deductionDetails: {
@@ -155,6 +163,7 @@ const calculateSalary = ({
       halfDay: halfDayDeduction,
       unpaidLeave: unpaidLeaveDeduction,
       late: lateDeduction,
+      shortLeave: shortLeaveDeduction,
     },
     totalDeductions,
     netPay,
@@ -206,9 +215,11 @@ const generateSalary = async (req, res) => {
     });
 
     // 4️⃣ Calculate Salary
+    const dailyWorkingHours = employee.dailyWorkingHours || 9;
     const cal = calculateSalary({
       basicPay,
       perDaySalary,
+      dailyWorkingHours,
       attendance,
       leaves,
     });
@@ -228,6 +239,7 @@ const generateSalary = async (req, res) => {
       totalHalfDays: cal.halfDay,
       paidLeaves: cal.paidLeaves,
       unpaidLeaves: cal.unpaidLeaves,
+      shortLeaves: cal.shortLeavesCount,
       totalWorkingHours: cal.totalWorkingHours,
       lateDays: cal.lateDays,
 
@@ -381,7 +393,8 @@ const getSalaryByMonth = async (req, res) => {
       absentDeduction: salary.deductionDetails.absent,
       halfDayDeduction: salary.deductionDetails.halfDay,
       lateDeduction: salary.deductionDetails.late,
-      unpaidLeaveDeduction: salary.deductionDetails.unpaidLeave
+      unpaidLeaveDeduction: salary.deductionDetails.unpaidLeave,
+      shortLeaveDeduction: salary.deductionDetails.shortLeave || 0
     };
 
     return res.json({

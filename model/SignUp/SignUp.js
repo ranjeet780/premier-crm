@@ -63,6 +63,9 @@ const SignUpSchema = new mongoose.Schema({
     ifscCode: {
         type: String
     },
+    bankAddress: {
+        type: String
+    },
     accountHolderName: {
         type: String
     },
@@ -131,6 +134,12 @@ const SignUpSchema = new mongoose.Schema({
         required: false
     },
     img: {
+        type: String,
+    },
+    aadhaarFile: {
+        type: String,
+    },
+    panFile: {
         type: String,
     },
     userType: {

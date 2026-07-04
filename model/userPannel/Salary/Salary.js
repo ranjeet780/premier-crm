@@ -19,6 +19,8 @@ const SalarySchema = new mongoose.Schema({
   // Leave based
   paidLeaves: { type: Number, default: 0 },
   unpaidLeaves: { type: Number, default: 0 },
+  shortLeaves: { type: Number, default: 0 },
+  lateDays: { type: Number, default: 0 },
 
   // Calculations
   overtimeHours: { type: Number, default: 0 },
@@ -35,7 +37,8 @@ const SalarySchema = new mongoose.Schema({
   absent: { type: Number, default: 0 },
   halfDay: { type: Number, default: 0 },
   late: { type: Number, default: 0 },
-  unpaidLeave: { type: Number, default: 0 }
+  unpaidLeave: { type: Number, default: 0 },
+  shortLeave: { type: Number, default: 0 }
 },
 
   createdAt: { type: Date, default: Date.now }

@@ -3,6 +3,7 @@
 module.exports = function calculateSalary({
     basicPay,
     perDaySalary,
+    dailyWorkingHours = 9,
     attendance,
     leaves
 }) {
@@ -15,26 +16,35 @@ module.exports = function calculateSalary({
         if (a.status === "Late") late++;
     });
 
-    let paidLeaves = 0, unpaidLeaves = 0;
+    let paidLeaves = 0, unpaidLeaves = 0, shortLeavesCount = 0;
 
     leaves.forEach(l => {
-        if (l.paid) paidLeaves += l.days;
-        else unpaidLeaves += l.days;
+        if (l.leave_type === "Short Leave" || l.leave_category === "Short Leave") {
+            shortLeavesCount++;
+        } else if (l.paid || l.leave_type === "Paid") {
+            paidLeaves += l.days;
+        } else {
+            unpaidLeaves += l.days;
+        }
     });
+
+    const perHourSalary = perDaySalary / dailyWorkingHours;
 
     // Deduction details
     const deductionDetails = {
         absent: absent * perDaySalary,
         halfDay: halfDay * (perDaySalary / 2),
         late: late * (perDaySalary * 0.25),
-        unpaidLeave: unpaidLeaves * perDaySalary
+        unpaidLeave: unpaidLeaves * perDaySalary,
+        shortLeave: shortLeavesCount * perHourSalary
     };
 
     const totalDeductions =
         deductionDetails.absent +
         deductionDetails.halfDay +
         deductionDetails.late +
-        deductionDetails.unpaidLeave;
+        deductionDetails.unpaidLeave +
+        deductionDetails.shortLeave;
 
     const netPay = basicPay - totalDeductions;
 
@@ -45,6 +55,7 @@ module.exports = function calculateSalary({
         late,
         paidLeaves,
         unpaidLeaves,
+        shortLeavesCount,
         deductionDetails,
         totalDeductions,
         netPay

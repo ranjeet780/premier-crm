@@ -56,6 +56,11 @@ const SubscriptionSchema = new mongoose.Schema(
       enum: ["Paid", "Unpaid", "Partial"],
       default: "Unpaid",
     },
+    currency: {
+      type: String,
+      enum: ["INR", "USD", "EUR", "GBP"],
+      default: "INR",
+    },
     signatureData: {
       type: String,
       default: "",

@@ -152,7 +152,10 @@ const UserLogin = async (req, res) => {
     });
 
     if (existing) {
-      // ❗ IMPORTANT: Do NOT change check_in, status, lateMinutes
+      if (existing.check_out) {
+        existing.check_out = null;
+        await existing.save();
+      }
       return sendLoginResponse(res, emp, token, {
         attendanceStatus: existing.status,
         check_in: existing.check_in,
@@ -258,7 +261,6 @@ const UserLogout = async (req, res) => {
     }
 
     attendance.check_out = formatTime(now);
-    // Working hours are now tracked via screen screenshots incrementally.
 
     await attendance.save();
 
@@ -434,7 +436,7 @@ const generateManualCode = async (req, res) => {
   try {
     const { employeeId } = req.body;
     console.log(" [DEBUG] generateManualCode called with employeeId:", employeeId);
-    
+
     if (!employeeId) {
       console.log(" [DEBUG] employeeId is missing in request body");
       return res.status(400).json({ message: "employeeId is required" });

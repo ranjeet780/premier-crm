@@ -5,8 +5,9 @@ const SignUp = require("../../model/SignUp/SignUp");
 
 
 function toDateOnly(d) {
-  const dt = new Date(d.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  return new Date(dt.toISOString().split("T")[0]);
+  const { formatDateIST, parseISTLocalToUTC } = require("../../utils/dateUtils");
+  const dateStr = formatDateIST(new Date(d));
+  return parseISTLocalToUTC(dateStr, "00:00:00");
 }
 
 async function createHoliday(req, res) {

@@ -1,4 +1,5 @@
 const Proposal = require("../../model/Purposal/Purposal");
+const ClientLead = require("../../model/ClientLead/ClientLead");
 const nodemailer = require("nodemailer");
 const path = require("path");
 const fs = require("fs");
@@ -17,8 +18,10 @@ async function sendProposalEmail({
   companyEmail,
   clientEmail,
   clientName,
+  clientPhone,
   title,
   description,
+  companyDescription,
   category,
   services,
   terms,
@@ -57,7 +60,7 @@ async function sendProposalEmail({
     const companyName = company?.name || "Premier WEBTECH";
 
     await transporter.sendMail({
-      from: `"${companyName}" <${companyEmail}>`,
+      from: `"${companyName}" <${process.env.EMAIL_USER}>`,
       replyTo: companyEmail,
       to: clientEmail,
       subject: `Proposal for ${clientName}`,
@@ -68,11 +71,22 @@ async function sendProposalEmail({
             <img src="cid:companylogo" alt="${companyName}" style="max-width: 160px;" />
           </div>
 
-          <h2 style="text-align: center;">Proposal for ${clientName}</h2>
+          <h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 20px;">Proposal for ${clientName}</h2>
 
-          <p><strong>Title:</strong> ${title}</p>
-          <p><strong>Description:</strong> ${description}</p>
-          <p><strong>Category:</strong> ${category.join(", ")}</p>
+          <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+            <h3 style="margin-top: 0; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">Client Information</h3>
+            <p style="margin: 6px 0;"><strong>Name:</strong> ${clientName}</p>
+            <p style="margin: 6px 0;"><strong>Email:</strong> ${clientEmail}</p>
+            <p style="margin: 6px 0;"><strong>Phone:</strong> ${clientPhone || "N/A"}</p>
+          </div>
+
+          <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+            <h3 style="margin-top: 0; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">Proposal Details</h3>
+            <p style="margin: 6px 0;"><strong>Title:</strong> ${title}</p>
+            <p style="margin: 6px 0; white-space: pre-wrap;"><strong>Project Description:</strong><br/>${description || "N/A"}</p>
+            <p style="margin: 12px 0 6px 0; white-space: pre-wrap;"><strong>Company Description:</strong><br/>${companyDescription || "N/A"}</p>
+            <p style="margin: 6px 0;"><strong>Category:</strong> ${category.join(", ")}</p>
+          </div>
 
           <p><strong>Services:</strong></p>
           <ul>
@@ -106,10 +120,12 @@ const createAndSendProposal = async (req, res) => {
       title,
       services,
       description,
+      companyDescription,
       category,
       terms,
       clientName,
       clientEmail,
+      clientPhone,
     } = req.body;
 
     const parsedServices = JSON.parse(services || "[]");
@@ -128,6 +144,7 @@ const createAndSendProposal = async (req, res) => {
       title,
       services: parsedServices,
       description,
+      companyDescription,
       category: parsedCategory,
       terms,
       attachments: (req.files || []).map((f) => f.originalname),
@@ -151,8 +168,10 @@ const createAndSendProposal = async (req, res) => {
           companyEmail: company.email,
           clientEmail,
           clientName,
+          clientPhone,
           title,
           description,
+          companyDescription,
           category: parsedCategory,
           services: parsedServices,
           terms,
@@ -187,7 +206,7 @@ const createAndSendProposal = async (req, res) => {
 const updateProposal = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, terms, services, category } = req.body;
+    const { title, description, companyDescription, terms, services, category, status, sendEmail } = req.body;
 
     // Parse services and category JSON strings to arrays
     const parsedServices = services ? JSON.parse(services) : [];
@@ -220,8 +239,9 @@ const updateProposal = async (req, res) => {
       {
         title,
         description,
+        companyDescription,
         terms,
-        status: "Sent",
+        status: status || (sendEmail === "false" ? "Draft" : "Sent"),
         services: parsedServices,
         category: parsedCategory,
         attachments: allAttachments,
@@ -229,17 +249,37 @@ const updateProposal = async (req, res) => {
         updatedAt: Date.now(),
       },
       { new: true, runValidators: true }
-    ).populate("clientId", "leadName emailId personal_email");
+    ).populate("clientId", "leadName emailId personal_email phoneNo");
 
     if (!updatedProposal) {
       return res.status(404).json({ message: "Proposal not found" });
     }
 
+    // Update associated ClientLeadData
+    if (updatedProposal.clientId?._id) {
+      const ClientLead = require("../../model/ClientLead/ClientLead");
+      const clientUpdate = {};
+      if (req.body.clientName) clientUpdate.leadName = req.body.clientName;
+      if (req.body.clientEmail) clientUpdate.emailId = req.body.clientEmail;
+      if (req.body.clientPhone) clientUpdate.phoneNo = req.body.clientPhone;
+
+      if (Object.keys(clientUpdate).length > 0) {
+        await ClientLead.findByIdAndUpdate(updatedProposal.clientId._id, clientUpdate);
+        
+        // Also update the populated fields on the updatedProposal instance so we use the new values
+        if (clientUpdate.leadName) updatedProposal.clientId.leadName = clientUpdate.leadName;
+        if (clientUpdate.emailId) updatedProposal.clientId.emailId = clientUpdate.emailId;
+        if (clientUpdate.phoneNo) updatedProposal.clientId.phoneNo = clientUpdate.phoneNo;
+      }
+    }
+
     // Determine client email and name for sending email
     const clientEmail =
-      updatedProposal.clientId?.emailId || updatedProposal.clientId?.personal_email;
+      req.body.clientEmail || updatedProposal.clientId?.emailId || updatedProposal.clientId?.personal_email;
     const clientName =
-      updatedProposal.clientId?.leadName || updatedProposal.clientId?.ename || "Client";
+      req.body.clientName || updatedProposal.clientId?.leadName || updatedProposal.clientId?.ename || "Client";
+    const clientPhone =
+      req.body.clientPhone || updatedProposal.clientId?.phoneNo || "";
 
     // Prepare email attachments array
     const emailAttachments = [];
@@ -271,33 +311,39 @@ const updateProposal = async (req, res) => {
     const company = await Company.findOne();
     let warning = "";
 
-    if (!company || !company.email) {
-      warning = "Proposal updated, but email was not sent (company email not configured).";
-    } else if (!clientEmail) {
-      warning = "Proposal updated, but email was not sent (client email missing).";
-    } else {
-      try {
-        // Send updated proposal email with attachments
-        await sendProposalEmail({
-          companyEmail: company.email,
-          clientEmail,
-          clientName,
-          title: updatedProposal.title,
-          description: updatedProposal.description,
-          category: updatedProposal.category || [],
-          services: updatedProposal.services || [],
-          terms: updatedProposal.terms,
-          files: emailAttachments,
-        });
-      } catch (mailErr) {
-        console.error("Proposal email send failed after update:", mailErr);
-        warning = "Proposal updated, but email sending failed.";
+    const shouldSendEmail = sendEmail !== "false";
+
+    if (shouldSendEmail) {
+      if (!company || !company.email) {
+        warning = "Proposal updated, but email was not sent (company email not configured).";
+      } else if (!clientEmail) {
+        warning = "Proposal updated, but email was not sent (client email missing).";
+      } else {
+        try {
+          // Send updated proposal email with attachments
+          await sendProposalEmail({
+            companyEmail: company.email,
+            clientEmail,
+            clientName,
+            clientPhone,
+            title: updatedProposal.title,
+            description: updatedProposal.description,
+            companyDescription: updatedProposal.companyDescription,
+            category: updatedProposal.category || [],
+            services: updatedProposal.services || [],
+            terms: updatedProposal.terms,
+            files: emailAttachments,
+          });
+        } catch (mailErr) {
+          console.error("Proposal email send failed after update:", mailErr);
+          warning = "Proposal updated, but email sending failed.";
+        }
       }
     }
 
     return res.status(200).json({
       success: true,
-      message: warning || "Proposal updated & sent successfully.",
+      message: warning || (shouldSendEmail ? "Proposal updated & sent successfully." : "Proposal saved successfully."),
       warning,
       proposal: updatedProposal,
       insights,

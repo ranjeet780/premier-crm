@@ -1,6 +1,7 @@
 const SignUp = require("../../model/SignUp/SignUp");
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
+const fileToBase64 = require("../../utils/fileToBase64");
 
 // ✅ Employee self-update API
 const updateSelfProfile = async (req, res) => {
@@ -11,15 +12,25 @@ const updateSelfProfile = async (req, res) => {
     let updates = { ...req.body };
 
     // whitelist fields
-    const allowedFields = ["ename", "phoneNo", "personal_email", "address", "emergencyContact", "relation", "qualification", "lastExp", "img", "resumeFile", "fatherName", "motherName", "dateOfBirth", "gender", "accountNo", "bankName", "ifscCode"];
+    const allowedFields = ["ename", "phoneNo", "personal_email", "address", "emergencyContact", "relation", "qualification", "lastExp", "img", "resumeFile", "aadhaarFile", "panFile", "fatherName", "motherName", "dateOfBirth", "gender", "accountNo", "bankName", "ifscCode", "bankAddress"];
     Object.keys(updates).forEach(key => {
       if (!allowedFields.includes(key)) delete updates[key];
     });
 
     // files
     if (req.files) {
-      if (req.files.img && req.files.img[0]) updates.img = `${req.protocol}://${req.get("host")}/uploads/images/${req.files.img[0].filename}`;
-      if (req.files.resumeFile && req.files.resumeFile[0]) updates.resumeFile = `${req.protocol}://${req.get("host")}/uploads/resumes/${req.files.resumeFile[0].filename}`;
+      if (req.files.img && req.files.img[0]) {
+        updates.img = fileToBase64(req.files.img[0]);
+      }
+      if (req.files.resumeFile && req.files.resumeFile[0]) {
+        updates.resumeFile = fileToBase64(req.files.resumeFile[0]);
+      }
+      if (req.files.aadhaarFile && req.files.aadhaarFile[0]) {
+        updates.aadhaarFile = fileToBase64(req.files.aadhaarFile[0]);
+      }
+      if (req.files.panFile && req.files.panFile[0]) {
+        updates.panFile = fileToBase64(req.files.panFile[0]);
+      }
     }
 
     // decide lookup by ObjectId vs employeeId

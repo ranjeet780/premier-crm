@@ -41,12 +41,21 @@ const createDomain = async (req, res) => {
       expireDate,
       platform,
       actualAmount,
-      paidAmount
+      paidAmount,
+      productType
     } = req.body;
 
-    if (!name || !url || !plan || !clientName || !purchasedOn || !expireDate || !platform || !actualAmount || !paidAmount) {
+    const pType = productType || 'domain';
+
+    if (!name || !plan || !clientName || !purchasedOn || !expireDate || actualAmount === undefined || actualAmount === "" || paidAmount === undefined || paidAmount === "") {
       return res.status(400).json({
-        message: "name, url, plan, clientName, purchasedOn, expireDate, platform, actualAmount and paidAmount are required"
+        message: "name, plan, clientName, purchasedOn, expireDate, actualAmount and paidAmount are required"
+      });
+    }
+
+    if (pType !== 'email' && (!url || !platform)) {
+      return res.status(400).json({
+        message: "url and platform are required for domain and hosting"
       });
     }
 
@@ -62,15 +71,16 @@ const createDomain = async (req, res) => {
 
     const domain = await Domain.create({
       name: String(name).trim(),
-      url: String(url).trim(),
+      url: url ? String(url).trim() : "",
       plan: String(plan).trim(),
       clientName: String(clientName).trim(),
-      platform: String(platform).trim(),
+      platform: platform ? String(platform).trim() : "",
       purchasedOn: parsedPurchasedOn,
       expireDate: parsedExpireDate,
       actualAmount: Number(actualAmount),
       paidAmount: Number(paidAmount),
       status: "Unpaid",
+      productType: pType,
     });
 
     return res.status(201).json(domain);

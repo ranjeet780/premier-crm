@@ -3,7 +3,7 @@ const createRoleBasedNotification = require(
   "../../utils/createRoleBasedNotification"
 );
 const { releaseEmployeeId } = require("../../utils/employeeIdAllocator");
-
+const fileToBase64 = require("../../utils/fileToBase64");
 
 
 // const updateUser = async (req, res) => {
@@ -62,15 +62,27 @@ const updateUser = async (req, res) => {
     // ❌ Prevent overwriting file fields with wrong values
     delete updateData.resumeFile;
     delete updateData.img;
+    delete updateData.aadhaarFile;
+    delete updateData.panFile;
 
     // ✅ Update resume if new file uploaded
     if (req.files?.resumeFile) {
-      updateData.resumeFile = `${req.protocol}://${req.get("host")}/uploads/resumes/${req.files.resumeFile[0].filename}`;
+      updateData.resumeFile = fileToBase64(req.files.resumeFile[0]);
     }
 
     // ✅ Update image if new file uploaded
     if (req.files?.img) {
-      updateData.img = `${req.protocol}://${req.get("host")}/uploads/images/${req.files.img[0].filename}`;
+      updateData.img = fileToBase64(req.files.img[0]);
+    }
+
+    // ✅ Update aadhaar if new file uploaded
+    if (req.files?.aadhaarFile) {
+      updateData.aadhaarFile = fileToBase64(req.files.aadhaarFile[0]);
+    }
+
+    // ✅ Update pan if new file uploaded
+    if (req.files?.panFile) {
+      updateData.panFile = fileToBase64(req.files.panFile[0]);
     }
 
     const updatedUser = await SignUp.findOneAndUpdate(
