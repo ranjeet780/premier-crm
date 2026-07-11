@@ -29,7 +29,12 @@ async function sendProposalEmail({
 }) {
   // ✅ SAME LOGIN AS INVOICE
   const transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    tls: {
+      rejectUnauthorized: false
+    },
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
@@ -46,6 +51,11 @@ async function sendProposalEmail({
   );
 
   const attachments = [...files];
+  let logoHtml = "";
+
+    // Fetch company details for branding
+    const company = await Company.findOne();
+    const companyName = company?.name || "Premier WEBTECH";
 
   if (fs.existsSync(logoPath)) {
     attachments.push({
@@ -53,11 +63,10 @@ async function sendProposalEmail({
       content: fs.readFileSync(logoPath),
       cid: "companylogo",
     });
+    logoHtml = `<div style="text-align: center; margin-bottom: 20px;">
+      <img src="cid:companylogo" alt="${companyName}" style="max-width: 160px;" />
+    </div>`;
   }
-
-    // Fetch company details for branding
-    const company = await Company.findOne();
-    const companyName = company?.name || "Premier WEBTECH";
 
     await transporter.sendMail({
       from: `"${companyName}" <${process.env.EMAIL_USER}>`,
@@ -67,9 +76,7 @@ async function sendProposalEmail({
       html: `
         <div style=" font-family: Arial, sans-serif; max-width: 700px; padding: 24px; text-align: left">
           
-          <div style="text-align: center; margin-bottom: 20px;">
-            <img src="cid:companylogo" alt="${companyName}" style="max-width: 160px;" />
-          </div>
+          ${logoHtml}
 
           <h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 20px;">Proposal for ${clientName}</h2>
 
@@ -126,6 +133,7 @@ const createAndSendProposal = async (req, res) => {
       clientName,
       clientEmail,
       clientPhone,
+      sendEmail,
     } = req.body;
 
     const parsedServices = JSON.parse(services || "[]");
@@ -138,6 +146,8 @@ const createAndSendProposal = async (req, res) => {
       terms,
     });
 
+    const shouldSendEmail = sendEmail !== "false";
+
     // Save proposal
     const proposal = new Proposal({
       clientId,
@@ -148,7 +158,7 @@ const createAndSendProposal = async (req, res) => {
       category: parsedCategory,
       terms,
       attachments: (req.files || []).map((f) => f.originalname),
-      status: "Sent",
+      status: shouldSendEmail ? "Sent" : "Draft",
       aiInsights: insights,
     });
 
@@ -157,38 +167,40 @@ const createAndSendProposal = async (req, res) => {
     const company = await Company.findOne();
     let warning = "";
 
-    if (!company || !company.email) {
-      warning = "Proposal saved, but email was not sent (company email not configured).";
-    } else if (!clientEmail) {
-      warning = "Proposal saved, but email was not sent (client email missing).";
-    } else {
-      try {
-        // Send proposal email
-        await sendProposalEmail({
-          companyEmail: company.email,
-          clientEmail,
-          clientName,
-          clientPhone,
-          title,
-          description,
-          companyDescription,
-          category: parsedCategory,
-          services: parsedServices,
-          terms,
-          files: (req.files || []).map((file) => ({
-            filename: file.originalname,
-            content: file.buffer,
-          })),
-        });
-      } catch (mailErr) {
-        console.error("Proposal email send failed after save:", mailErr);
-        warning = "Proposal saved, but email sending failed.";
+    if (shouldSendEmail) {
+      if (!company || !company.email) {
+        warning = "Proposal saved, but email was not sent (company email not configured).";
+      } else if (!clientEmail) {
+        warning = "Proposal saved, but email was not sent (client email missing).";
+      } else {
+        try {
+          // Send proposal email
+          await sendProposalEmail({
+            companyEmail: company.email,
+            clientEmail,
+            clientName,
+            clientPhone,
+            title,
+            description,
+            companyDescription,
+            category: parsedCategory,
+            services: parsedServices,
+            terms,
+            files: (req.files || []).map((file) => ({
+              filename: file.originalname,
+              content: file.buffer,
+            })),
+          });
+        } catch (mailErr) {
+          console.error("Proposal email send failed after save:", mailErr);
+          warning = "Proposal saved, but email sending failed.";
+        }
       }
     }
 
     res.status(201).json({
       success: true,
-      message: warning || "Proposal sent successfully",
+      message: warning || (shouldSendEmail ? "Proposal saved & sent successfully!" : "Proposal saved successfully!"),
       warning,
       proposal,
       insights,
@@ -336,7 +348,7 @@ const updateProposal = async (req, res) => {
           });
         } catch (mailErr) {
           console.error("Proposal email send failed after update:", mailErr);
-          warning = "Proposal updated, but email sending failed.";
+          warning = "Proposal updated, but email sending failed. Reason: " + mailErr.message;
         }
       }
     }

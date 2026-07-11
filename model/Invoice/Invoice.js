@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const paymentSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   method: { type: String }, // e.g. "UPI", "Bank Transfer", "Cash"
+  bankName: { type: String },
   note: { type: String },
   date: { type: Date, default: Date.now },
 });

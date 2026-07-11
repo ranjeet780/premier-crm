@@ -99,7 +99,7 @@ const createSubscription = async (req, res) => {
       createdDate: parsedCreatedDate,
       expiringOn: parsedExpiringOn,
       status: finalStatus,
-      currency: currency && ["INR", "USD", "EUR", "GBP"].includes(currency) ? currency : "INR",
+      currency: currency && ["INR", "USD", "EUR", "GBP", "CAD"].includes(currency) ? currency : "INR",
     });
 
     return res.status(201).json(subscription);
@@ -284,7 +284,7 @@ const updateSubscriptionCurrency = async (req, res) => {
     const { id } = req.params;
     const { currency } = req.body;
 
-    if (!currency || !["INR", "USD", "EUR", "GBP"].includes(currency)) {
+    if (!currency || !["INR", "USD", "EUR", "GBP", "CAD"].includes(currency)) {
       return res.status(400).json({ message: "Invalid or missing currency" });
     }
 
@@ -398,7 +398,7 @@ const downloadSubscriptionPdf = async (req, res) => {
     const paidNumber = Number(subscription.paidAmount || 0);
     const balanceNumber = Math.max(amountNumber - paidNumber, 0);
     const currency = subscription.currency || "INR";
-    const sym = { INR: "Rs.", USD: "$", EUR: "€", GBP: "£" }[currency] || "Rs.";
+    const sym = { INR: "Rs.", USD: "$", EUR: "€", GBP: "£", CAD: "CA$" }[currency] || "Rs.";
     const amountText = `${sym} ${amountNumber.toLocaleString("en-IN", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,

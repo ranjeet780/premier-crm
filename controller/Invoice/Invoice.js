@@ -261,10 +261,8 @@ const createInvoice = async (req, res) => {
       },
     });
 
-    await transporter.verify();
-
     /* ---------- SEND EMAIL ---------- */
-    await transporter.sendMail({
+    transporter.sendMail({
       from: `"${company.name}" <${process.env.EMAIL_USER}>`,
       replyTo: company.email,
       to: clientEmail,
@@ -326,11 +324,13 @@ const createInvoice = async (req, res) => {
 
       </div>
       `,
+    }).catch(err => {
+      console.error("❌ invoice email send failed asynchronously:", err.message);
     });
 
     res.status(201).json({
       success: true,
-      message: "Invoice created and sent successfully",
+      message: "Invoice created successfully",
       invoice,
     });
   } catch (err) {
@@ -426,7 +426,11 @@ const getInvoicesByClient = async (req, res) => {
 const addPayment = async (req, res) => {
   try {
     const { id } = req.params; // invoice id
-    const { amount, method, note } = req.body;
+    const { amount, method, note, bankName } = req.body;
+
+    if (!bankName) {
+      return res.status(400).json({ success: false, message: "Bank Name is required for payment" });
+    }
 
     const invoice = await Invoice.findById(id);
     if (!invoice) {
@@ -438,6 +442,7 @@ const addPayment = async (req, res) => {
     invoice.payments.push({
       amount: Number(amount),
       method: method || invoice.paymentMethod || "UPI",
+      bankName: req.body.bankName || "",
       note,
       date: new Date(),
     });

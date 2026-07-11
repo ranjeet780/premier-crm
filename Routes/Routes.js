@@ -113,6 +113,11 @@ const authMiddleware = require("../controller/middleware/authMiddleware");
 const { getEmployeesByServiceTask, getEmployeesByServiceInTask } = require("../controller/Task/Task");
 // const {  markNotificationRead, getEmployeeNotifications } = require("../controller/Notification/getEmployeeNotification");
 
+const { createBankAccount, getBankAccounts, deleteBankAccount, updateBankAccount } = require("../controller/BankAccountController");
+const { createCategory, getCategories, deleteCategory } = require("../controller/ExpenseCategoryController");
+const { createExpense, getExpenses, deleteExpense, updateExpense } = require("../controller/ExpenseController");
+const { createIncome, getIncomes, deleteIncome } = require("../controller/IncomeController");
+
 
 const Router = express.Router();
 
@@ -475,7 +480,26 @@ Router.get('/getJobOpeningNotification', authMiddleware, getJobOpeningNotificati
 Router.put('/ReadJobOpeningNotification/:id', authMiddleware, markAsReadJobOpeningNotification)
 
 
+// Bank Accounts
+Router.post("/bank-account", createBankAccount);
+Router.get("/bank-account", getBankAccounts);
+Router.put("/bank-account/:id", updateBankAccount);
+Router.delete("/bank-account/:id", deleteBankAccount);
 
+// Expense Category
+Router.post("/expense-category", createCategory);
+Router.get("/expense-category", getCategories);
+Router.delete("/expense-category/:id", deleteCategory);
 
+// Expenses
+Router.post("/expense", createExpense);
+Router.get("/expense", getExpenses);
+Router.put("/expense/:id", updateExpense);
+Router.delete("/expense/:id", deleteExpense);
+
+// Incomes
+Router.post("/income", createIncome);
+Router.get("/income", getIncomes);
+Router.delete("/income/:id", deleteIncome);
 
 module.exports = Router;
