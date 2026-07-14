@@ -3,10 +3,10 @@ const BankAccount = require('../model/BankAccount');
 
 exports.createExpense = async (req, res) => {
     try {
-        const { categoryId, amount, bankAccountId, date } = req.body;
+        const { categoryId, amount, bankAccountId, paymentMethod, date } = req.body;
         
-        if (!categoryId || !amount || !bankAccountId) {
-            return res.status(400).json({ success: false, message: "Category, Amount, and Bank are required" });
+        if (!categoryId || !amount || !bankAccountId || !paymentMethod) {
+            return res.status(400).json({ success: false, message: "Category, Amount, Bank, and Payment Method are required" });
         }
 
         const expenseDate = date ? new Date(date) : new Date();
@@ -23,7 +23,7 @@ exports.createExpense = async (req, res) => {
         bankAccount.accountCapital -= Number(amount);
         await bankAccount.save();
 
-        const expense = new Expense({ categoryId, amount, bankAccountId, date: expenseDate });
+        const expense = new Expense({ categoryId, amount, bankAccountId, paymentMethod, date: expenseDate });
         await expense.save();
 
         res.status(201).json({ success: true, message: "Expense added successfully! Capital deducted.", expense });
@@ -65,7 +65,7 @@ exports.deleteExpense = async (req, res) => {
 exports.updateExpense = async (req, res) => {
     try {
         const { id } = req.params;
-        const { categoryId, amount, bankAccountId, date } = req.body;
+        const { categoryId, amount, bankAccountId, paymentMethod, date } = req.body;
         
         const expense = await Expense.findById(id);
         if (!expense) {
@@ -104,6 +104,7 @@ exports.updateExpense = async (req, res) => {
         expense.categoryId = categoryId;
         expense.amount = amount;
         expense.bankAccountId = bankAccountId;
+        expense.paymentMethod = paymentMethod;
         if (date) expense.date = new Date(date);
         
         await expense.save();
