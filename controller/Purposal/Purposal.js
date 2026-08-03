@@ -164,6 +164,15 @@ const createAndSendProposal = async (req, res) => {
 
     await proposal.save();
 
+    // Automatically update ClientLead status to "Proposal sent" when proposal is sent
+    if (clientId && (shouldSendEmail || proposal.status === "Sent")) {
+      try {
+        await ClientLead.findByIdAndUpdate(clientId, { status: "Proposal sent" });
+      } catch (leadErr) {
+        console.error("Failed to auto-update ClientLead status to Proposal sent:", leadErr);
+      }
+    }
+
     const company = await Company.findOne();
     let warning = "";
 
@@ -274,6 +283,9 @@ const updateProposal = async (req, res) => {
       if (req.body.clientName) clientUpdate.leadName = req.body.clientName;
       if (req.body.clientEmail) clientUpdate.emailId = req.body.clientEmail;
       if (req.body.clientPhone) clientUpdate.phoneNo = req.body.clientPhone;
+      if (sendEmail !== "false" || updatedProposal.status === "Sent") {
+        clientUpdate.status = "Proposal sent";
+      }
 
       if (Object.keys(clientUpdate).length > 0) {
         await ClientLead.findByIdAndUpdate(updatedProposal.clientId._id, clientUpdate);

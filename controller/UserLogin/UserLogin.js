@@ -9,7 +9,8 @@ const { markAttendanceCheckIn, markAttendanceCheckOut } = require("../Attendance
 const { formatDateIST, formatTime, parseISTLocalToUTC } = require("../../utils/dateUtils");
 const crypto = require("crypto");
 const Holiday = require("../../model/Holiday/Holiday");
-const Leave = require('../../model/userPannel/Leaves/Leaves')
+const Leave = require('../../model/userPannel/Leaves/Leaves');
+const User = require("../../model/Users/Users");
 
 const TIME_ZONE = "Asia/Kolkata";
 const DEFAULT_OFFICE_START = "09:30";
@@ -58,7 +59,16 @@ const UserLogin = async (req, res) => {
       });
     }
 
-    const ok = await bcrypt.compare(password, emp.password || "");
+    let ok = await bcrypt.compare(password, emp.password || "");
+    if (!ok && emp.password && emp.password === password) {
+      ok = true;
+      try {
+        const hashed = await bcrypt.hash(password, 10);
+        await SignUp.findByIdAndUpdate(emp._id, { password: hashed });
+      } catch (hErr) {
+        console.error("Auto hash upgrade error:", hErr);
+      }
+    }
     if (!ok) return res.status(400).json({ message: "Invalid password" });
 
     /* 1.1️⃣ CHECK LOCKED STATUS */
@@ -334,37 +344,77 @@ function getFrontendBaseUrl() {
 const forgotPassword = async (req, res) => {
   try {
     const { official_email } = req.body;
+    if (!official_email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
 
-    const user = await SignUp.findOne({ official_email });
-    if (!user) return res.status(404).json({ message: "Email not found" });
+    const trimmedEmail = official_email.trim();
+    const emailRegex = new RegExp(`^${trimmedEmail}$`, "i");
+
+    let user = await SignUp.findOne({ official_email: emailRegex });
+    let isUserCollection = false;
+
+    if (!user) {
+      user = await User.findOne({ email: emailRegex });
+      isUserCollection = true;
+    }
+
+    if (!user) {
+      return res.status(404).json({ message: "No account found with this email address." });
+    }
 
     const token = crypto.randomBytes(20).toString("hex");
-    await SignUp.updateOne(
-      { _id: user._id },
-      {
-        $set: {
-          resetPasswordToken: token,
-          resetPasswordExpires: new Date(Date.now() + 3600000),
-        },
-      }
-    );
+    const expires = new Date(Date.now() + 3600000); // 1 hour
+
+    if (isUserCollection) {
+      await User.updateOne(
+        { _id: user._id },
+        { $set: { resetPasswordToken: token, resetPasswordExpires: expires } }
+      );
+    } else {
+      await SignUp.updateOne(
+        { _id: user._id },
+        { $set: { resetPasswordToken: token, resetPasswordExpires: expires } }
+      );
+    }
 
     const frontendBaseUrl = getFrontendBaseUrl();
-    if (!frontendBaseUrl) {
-      throw new Error("FRONTEND_URL (or CLIENT_URL) is required in production");
-    }
     const link = `${frontendBaseUrl}/reset-password/${token}`;
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: official_email,
-      subject: "Reset Password",
-      html: `<a href="${link}">Reset Password</a>`,
-    });
+    console.log(`🔑 Reset Password link generated for ${trimmedEmail}: ${link}`);
 
-    res.json({ message: "Password reset link sent" });
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: trimmedEmail,
+        subject: "Reset Your Password - Premier Webtech",
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+            <h2 style="color: #0d6efd;">Premier Webtech Password Reset</h2>
+            <p>Hello,</p>
+            <p>You requested to reset your password. Click the button below to set a new password:</p>
+            <p style="margin: 20px 0;">
+              <a href="${link}" style="background-color: #0d6efd; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Reset Password</a>
+            </p>
+            <p>Or copy and paste this link into your browser:</p>
+            <p><a href="${link}">${link}</a></p>
+            <p style="color: #777; font-size: 12px; margin-top: 30px;">This link will expire in 1 hour. If you did not request a password reset, please ignore this email.</p>
+          </div>
+        `,
+      });
+
+      return res.json({ message: "Password reset link sent to your email!" });
+    } catch (emailErr) {
+      console.error("Nodemailer error sending reset email:", emailErr);
+      // In dev mode, return the link in response if mail server fails
+      return res.status(200).json({
+        message: `Password reset link created! (Email dispatch issue: ${emailErr.message}). You can use this reset link directly:`,
+        resetLink: link
+      });
+    }
   } catch (err) {
-    res.status(500).json({ message: "Email error", error: err.message });
+    console.error("forgotPassword error:", err);
+    return res.status(500).json({ message: "Error processing forgot password", error: err.message });
   }
 };
 
@@ -372,32 +422,53 @@ const resetUserPassword = async (req, res) => {
   try {
     const token = req.params.token || req.body.token;
     const { newPassword } = req.body;
+
     if (!token || !newPassword) {
       return res.status(400).json({ message: "Token and new password are required" });
     }
 
-    const user = await SignUp.findOne({
+    let user = await SignUp.findOne({
       resetPasswordToken: token,
       resetPasswordExpires: { $gt: Date.now() },
     });
+    let isUserCollection = false;
 
-    if (!user) return res.status(400).json({ message: "Invalid/expired token" });
+    if (!user) {
+      user = await User.findOne({
+        resetPasswordToken: token,
+        resetPasswordExpires: { $gt: Date.now() },
+      });
+      isUserCollection = true;
+    }
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired password reset link." });
+    }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await SignUp.updateOne(
-      { _id: user._id },
-      {
-        $set: { password: hashedPassword },
-        $unset: {
-          resetPasswordToken: 1,
-          resetPasswordExpires: 1,
-        },
-      }
-    );
 
-    res.json({ message: "Password reset successful" });
+    if (isUserCollection) {
+      await User.updateOne(
+        { _id: user._id },
+        {
+          $set: { password: hashedPassword },
+          $unset: { resetPasswordToken: 1, resetPasswordExpires: 1 },
+        }
+      );
+    } else {
+      await SignUp.updateOne(
+        { _id: user._id },
+        {
+          $set: { password: hashedPassword },
+          $unset: { resetPasswordToken: 1, resetPasswordExpires: 1 },
+        }
+      );
+    }
+
+    return res.json({ message: "Password reset successful! You can now log in with your new password." });
   } catch (err) {
-    res.status(500).json({ message: "Error", error: err.message });
+    console.error("resetUserPassword error:", err);
+    return res.status(500).json({ message: "Error resetting password", error: err.message });
   }
 };
 

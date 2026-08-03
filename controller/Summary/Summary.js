@@ -9,7 +9,8 @@ const getAdminSummary = async (req, res) => {
   try {
     const totalEmployees = await Employee.countDocuments();
     const totalProjects = await Project.countDocuments();
-    const totalClients = await Client.countDocuments();
+    const totalClients = await Client.countDocuments({ userType: { $ne: "lead" } });
+    const totalLeads = await Client.countDocuments({ userType: "lead" });
 
     const partialInvoices = await Invoice.find({
       status: { $in: ["Partial", "Pending"] },
@@ -35,6 +36,7 @@ const getAdminSummary = async (req, res) => {
       totalEmployees,
       totalProjects,
       totalClients,
+      totalLeads,
       pendingPayments,
       jobsOpening,
       totalTasks,

@@ -221,6 +221,17 @@ const updateTask = async (req, res) => {
     const taskId = req.params.id;
     const body = req.body;
 
+    const existingTask = await Task.findById(taskId);
+    if (!existingTask) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    if (String(existingTask.status || "").toLowerCase() === "completed") {
+      return res.status(400).json({
+        message: "Completed tasks are locked. No action or re-assignment can be done on completed tasks."
+      });
+    }
+
     if (body.dueDate) {
       body.reminder_offsets_sent = [];
     }
@@ -234,10 +245,6 @@ const updateTask = async (req, res) => {
       .populate("clientId", "leadName")
       .populate("projectId", "projectName")
       .populate("serviceId", "serviceName");
-
-    if (!updatedTask) {
-      return res.status(404).json({ message: "Task not found" });
-    }
 
     res.status(200).json({
       success: true,
@@ -255,8 +262,16 @@ const updateTask = async (req, res) => {
 const deleteTask = async (req, res) => {
   try {
     const taskId = req.params.id;
-    const deletedTask = await Task.findByIdAndDelete(taskId);
-    if (!deletedTask) return res.status(404).json({ message: "Task not found" });
+    const task = await Task.findById(taskId);
+    if (!task) return res.status(404).json({ message: "Task not found" });
+
+    if (String(task.status || "").toLowerCase() === "completed") {
+      return res.status(400).json({
+        message: "Completed tasks are locked and cannot be deleted."
+      });
+    }
+
+    await Task.findByIdAndDelete(taskId);
     res.status(200).json({ success: true, message: "Task deleted" });
   } catch (err) {
     console.error("deleteTask:", err);
@@ -266,7 +281,6 @@ const deleteTask = async (req, res) => {
 
 // ---------- Start Timer (Employee) ----------
 
-
 // ---------- Start Timer ----------
 const startTimer = async (req, res) => {
   try {
@@ -275,6 +289,10 @@ const startTimer = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
+    }
+
+    if (String(task.status || "").toLowerCase() === "completed") {
+      return res.status(400).json({ message: "Cannot start timer on a completed and locked task." });
     }
 
     // 🔒 Check if another task of same employee is running

@@ -19,20 +19,36 @@ const ConvertToClient = async (req, res) => {
         res.status(500).json({ error: error.message });  
     }
 };
-const updateStatus = async(req, res)=>{
-    try {
+const updateStatus = async (req, res) => {
+  try {
     const { status, customStatus } = req.body;
+    const { id } = req.params;
 
-    const updatedLead = await Lead.findByIdAndUpdate(
-      req.params.id,
-      { status, customStatus: status === "Other" ? customStatus : "" },
-      { new: true }
-    );
+    let updatedLead = null;
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+      updatedLead = await Lead.findByIdAndUpdate(
+        id,
+        { status, customStatus: status === "Other" ? customStatus : "" },
+        { new: true }
+      );
+    }
 
-    res.json(updatedLead);
+    if (!updatedLead) {
+      updatedLead = await Lead.findOneAndUpdate(
+        { leadId: id },
+        { status, customStatus: status === "Other" ? customStatus : "" },
+        { new: true }
+      );
+    }
+
+    if (!updatedLead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    res.json({ message: "Status updated successfully", lead: updatedLead });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-}
+};
 
 module.exports = { ConvertToClient , updateStatus};

@@ -30,9 +30,15 @@ const LoginAdmin = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // ✅ ROLE VALIDATION: Selected role MUST match user's assigned role in database
-    const dbRole = (user.role || "").toLowerCase().replace(/\s+/g, "");
-    const selectedRole = (role || "").toLowerCase().replace(/\s+/g, "");
+    // ✅ ROLE VALIDATION: Selected role MUST strictly match user's assigned role in database
+    const dbRole = String(user.role || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[\s_-]+/g, "");
+    const selectedRole = String(role || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[\s_-]+/g, "");
 
     if (dbRole !== selectedRole) {
       return res.status(400).json({

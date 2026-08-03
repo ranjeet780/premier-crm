@@ -1,4 +1,5 @@
 const SignUp = require('../../model/SignUp/SignUp');
+const bcrypt = require('bcrypt');
 const createRoleBasedNotification = require(
   "../../utils/createRoleBasedNotification"
 );
@@ -58,6 +59,15 @@ const updateUser = async (req, res) => {
 
     // Start with request body data
     const updateData = { ...req.body };
+
+    // 🔒 Password update handling: Hash if new password provided, or ignore if empty/unchanged
+    if (updateData.password && updateData.password.trim() !== "") {
+      if (!updateData.password.startsWith("$2b$")) {
+        updateData.password = await bcrypt.hash(updateData.password, 10);
+      }
+    } else {
+      delete updateData.password;
+    }
 
     // ❌ Prevent overwriting file fields with wrong values
     delete updateData.resumeFile;
