@@ -37,6 +37,7 @@ const createDomain = async (req, res) => {
       url,
       plan,
       clientName,
+      clientEmail,
       purchasedOn,
       expireDate,
       platform,
@@ -74,6 +75,7 @@ const createDomain = async (req, res) => {
       url: url ? String(url).trim() : "",
       plan: String(plan).trim(),
       clientName: String(clientName).trim(),
+      clientEmail: clientEmail ? String(clientEmail).trim() : "",
       platform: platform ? String(platform).trim() : "",
       purchasedOn: parsedPurchasedOn,
       expireDate: parsedExpireDate,
@@ -95,6 +97,45 @@ const getDomains = async (req, res) => {
     return res.status(200).json(domains);
   } catch (error) {
     return res.status(500).json({ message: error.message || "Failed to fetch domains" });
+  }
+};
+
+const updateDomain = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      url,
+      plan,
+      clientName,
+      clientEmail,
+      purchasedOn,
+      expireDate,
+      platform,
+      actualAmount,
+      paidAmount,
+      productType
+    } = req.body;
+
+    const updateData = {};
+    if (name) updateData.name = String(name).trim();
+    if (url !== undefined) updateData.url = String(url).trim();
+    if (plan) updateData.plan = String(plan).trim();
+    if (clientName) updateData.clientName = String(clientName).trim();
+    if (clientEmail !== undefined) updateData.clientEmail = String(clientEmail).trim();
+    if (platform !== undefined) updateData.platform = String(platform).trim();
+    if (purchasedOn) updateData.purchasedOn = parseDate(purchasedOn);
+    if (expireDate) updateData.expireDate = parseDate(expireDate);
+    if (actualAmount !== undefined) updateData.actualAmount = Number(actualAmount);
+    if (paidAmount !== undefined) updateData.paidAmount = Number(paidAmount);
+    if (productType) updateData.productType = productType;
+
+    const updated = await Domain.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+    if (!updated) return res.status(404).json({ message: "Domain not found" });
+
+    return res.status(200).json(updated);
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to update domain" });
   }
 };
 
@@ -141,6 +182,7 @@ const deleteDomain = async (req, res) => {
 module.exports = {
   createDomain,
   getDomains,
+  updateDomain,
   updateDomainStatus,
   deleteDomain,
 };

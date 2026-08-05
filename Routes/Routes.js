@@ -24,7 +24,7 @@ const { job_data } = require("../Update_job_no/Update_job_no");
 const { getTraineeData } = require("../controller/Employee/getTraniee");
 const { updateUser, deleteUser } = require("../controller/SignUp/SignUpDelandUpdate");
 const { UpdateType, getAllEmployees, deleteEmployee, toggleEmployeeBlock } = require("../controller/SignUp/UpdateUserType");
-const { Get_ClientLead, Gen_ClientLead, deleteLead, getLeadById, sendPasswordSetupOtp, createPassword, clientLogin } = require("../controller/ClientLead/ClientLeadData");
+const { Get_ClientLead, Gen_ClientLead, deleteLead, getLeadById, sendPasswordSetupOtp, createPassword, clientLogin, addLeadNote, deleteLeadNote } = require("../controller/ClientLead/ClientLeadData");
 const { Get_Lead, Get_Client, getClientLeadById } = require("../controller/ClientLead/getClient");
 const { updateVacancy, selectResumeForJob, unselectResumeForJob, blockResumeForJob, unblockResumeForJob } = require("../controller/Job_Opening/UpdateJob");
 const { getEmpdatabyID, getEmployeesByDepartment } = require("../controller/Employee/getEmpbyId");
@@ -56,7 +56,7 @@ const { notifyTask } = require("../controller/Notification/NotifyTask");
 const { sendNotification, getNotifications, markAsRead, getAllNotifications, deleteNotice, updateNoticeMeta } = require("../controller/Notification/Notification");
 const router = require("./Roles");
 const { updateCompany, createCompany, getCompany } = require("../controller/CompanyDetails/CompanyDetails");
-const { createDomain, getDomains, updateDomainStatus, deleteDomain } = require("../controller/Domain/Domain");
+const { createDomain, getDomains, updateDomain, updateDomainStatus, deleteDomain } = require("../controller/Domain/Domain");
 const {
   createSubscription,
   getSubscriptions,
@@ -338,6 +338,7 @@ Router.get('/getCompnayDetails', getCompany)
 Router.put('/updateCompnay/:id', updateCompany)
 Router.post('/domains', createDomain)
 Router.get('/domains', getDomains)
+Router.put('/domains/:id', updateDomain)
 Router.put('/domains/:id/status', updateDomainStatus)
 Router.delete('/domains/:id', deleteDomain)
 Router.post('/subscriptions', createSubscription)
@@ -372,6 +373,8 @@ Router.delete("/DeleteLead/:leadId", deleteLead);
 Router.put("/updateClientLead/:leadId", authMiddleware, updateClientUser);
 Router.delete("/deleteClientLead/:leadId", deleteClientUser);
 Router.get("/getClientLeadbyId/:leadId", getClientLeadById);
+Router.post("/addLeadNote/:leadId", addLeadNote);
+Router.delete("/deleteLeadNote/:leadId/:noteId", deleteLeadNote);
 Router.post('/client/send-password-otp', sendPasswordSetupOtp);
 Router.post('/client/create-password', createPassword)
 Router.post('/clientLogin', clientLogin)

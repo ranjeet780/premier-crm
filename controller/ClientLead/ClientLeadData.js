@@ -1,4 +1,5 @@
-const ClientLeadData = require('../../model/ClientLead/ClientLead')
+const ClientLeadData = require('../../model/ClientLead/ClientLead');
+const mongoose = require('mongoose');
 const otpGenerator = require('otp-generator'); // npm install otp-generator
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcrypt');
@@ -23,7 +24,8 @@ const Gen_ClientLead = async (req, res) => {
       project_price, start_date, deadline,
       startProjectDate, date, status, assign,
       userType, accountNo, ifscCode, gstNumber,
-      bankName, accountHolderName, adarCardNo, panNo
+      bankName, accountHolderName, adarCardNo, panNo,
+      notes
     } = req.body;
 
     // ✅ check duplicate by email
@@ -32,13 +34,21 @@ const Gen_ClientLead = async (req, res) => {
       return res.status(400).json({ message: "User Already Exists" });
     }
 
+    const initialDiscussionNotes = notes && notes.trim() ? [{
+      note: notes.trim(),
+      createdBy: req.user?.ename || req.user?.name || req.user?.role || "User",
+      createdAt: new Date()
+    }] : [];
+
     const newClient = new ClientLeadData({
       leadName, emailId, phoneNo, sourse,
       department, service, project_type,
       project_price, start_date, deadline,
       startProjectDate, date, status,
       assign, userType, accountNo, ifscCode, gstNumber,
-      bankName, accountHolderName, adarCardNo, panNo
+      bankName, accountHolderName, adarCardNo, panNo,
+      notes: notes || "",
+      discussionNotes: initialDiscussionNotes
     });
 
     const savedLead = await newClient.save();
@@ -260,9 +270,115 @@ const clientLogin = async (req, res) => {
   }
 };
 
+const addLeadNote = async (req, res) => {
+  try {
+    const idOrLeadId = String(req.params.id || req.params.leadId || "").trim();
+    const { note, createdBy } = req.body;
 
-module.exports = { Gen_ClientLead, Get_ClientLead , deleteLead  , getLeadById , sendOtpEmail ,sendPasswordSetupOtp ,
-  createPassword , clientLogin
+    if (!note || !note.trim()) {
+      return res.status(400).json({ message: "Note text is required" });
+    }
 
+    let lead = await ClientLeadData.findOne({ leadId: idOrLeadId });
+    if (!lead) {
+      lead = await ClientLeadData.findOne({ leadId: new RegExp(`^${idOrLeadId}$`, "i") });
+    }
+    if (!lead && mongoose.Types.ObjectId.isValid(idOrLeadId)) {
+      lead = await ClientLeadData.findById(idOrLeadId);
+    }
+    if (!lead && req.body.leadDbId && mongoose.Types.ObjectId.isValid(req.body.leadDbId)) {
+      lead = await ClientLeadData.findById(req.body.leadDbId);
+    }
 
+    if (!lead) {
+      return res.status(404).json({ message: "Lead record not found in system" });
+    }
+
+    const noteText = note.trim();
+    const author = createdBy || req.user?.ename || req.user?.name || req.user?.role || "User";
+
+    lead.notes = noteText;
+    if (!Array.isArray(lead.discussionNotes)) {
+      lead.discussionNotes = [];
+    }
+    lead.discussionNotes.push({
+      note: noteText,
+      createdBy: author,
+      createdAt: new Date(),
+    });
+
+    await lead.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Note added successfully",
+      lead,
+    });
+  } catch (error) {
+    console.error("Add Lead Note error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const deleteLeadNote = async (req, res) => {
+  try {
+    const idOrLeadId = String(req.params.id || req.params.leadId || "").trim();
+    const noteId = String(req.params.noteId || "").trim();
+
+    const query = [];
+    if (mongoose.Types.ObjectId.isValid(idOrLeadId)) {
+      query.push({ _id: idOrLeadId });
+    }
+    query.push({ leadId: idOrLeadId });
+    query.push({ leadId: new RegExp(`^${idOrLeadId}$`, "i") });
+
+    const lead = await ClientLeadData.findOne({ $or: query });
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    if (!Array.isArray(lead.discussionNotes)) {
+      lead.discussionNotes = [];
+    }
+
+    const initialLength = lead.discussionNotes.length;
+    lead.discussionNotes = lead.discussionNotes.filter((item, index) => {
+      if (item._id && String(item._id) === noteId) return false;
+      if (String(index) === noteId) return false;
+      return true;
+    });
+
+    if (lead.discussionNotes.length === initialLength && lead.notes) {
+      lead.notes = "";
+    } else if (lead.discussionNotes.length > 0) {
+      lead.notes = lead.discussionNotes[lead.discussionNotes.length - 1].note;
+    } else {
+      lead.notes = "";
+    }
+
+    await lead.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Note deleted successfully",
+      lead,
+    });
+  } catch (error) {
+    console.error("Delete Lead Note error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = {
+  Gen_ClientLead,
+  Get_ClientLead,
+  deleteLead,
+  getLeadById,
+  sendOtpEmail,
+  sendPasswordSetupOtp,
+  createPassword,
+  clientLogin,
+  addLeadNote,
+  deleteLeadNote,
 };

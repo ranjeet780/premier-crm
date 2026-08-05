@@ -430,7 +430,7 @@ const downloadSubscriptionPdf = async (req, res) => {
     const contentWidth = pageRight - pageLeft;
 
     doc.font("Helvetica-Bold").fontSize(24).fillColor("#1976be");
-    doc.text("INVOICE", pageLeft, 40, { width: contentWidth, align: "center" });
+    doc.text("PROFORMA INVOICE", pageLeft, 40, { width: contentWidth, align: "center" });
 
     const headerY = 90;
     doc.font("Helvetica-Bold").fontSize(11).fillColor("#1976be").text("Premier Webtech", pageLeft, headerY);

@@ -1,10 +1,14 @@
 const bcrypt = require("bcryptjs");
 const User = require("../../model/Users/Users");
 const jwt = require("jsonwebtoken");
+const { createAuditLog, getClientIp } = require("../../utils/logActivity");
 
 const LoginAdmin = async (req, res) => {
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers["user-agent"] || "Unknown";
+  const rawEmail = req.body.official_email || req.body.email || "";
+
   try {
-    const rawEmail = req.body.official_email || req.body.email || "";
     const password = req.body.password || "";
     const role = req.body.role || "";
 
@@ -27,10 +31,20 @@ const LoginAdmin = async (req, res) => {
     });
 
     if (!user) {
+      await createAuditLog({
+        userName: "Unknown",
+        userEmail: rawEmail,
+        userRole: role || "unknown",
+        action: "FAILED_LOGIN",
+        status: "FAILED",
+        ipAddress,
+        userAgent,
+        details: "User not found",
+      });
       return res.status(404).json({ message: "User not found" });
     }
 
-    // ✅ ROLE VALIDATION: Selected role MUST strictly match user's assigned role in database
+    // ✅ ROLE VALIDATION
     const dbRole = String(user.role || "")
       .toLowerCase()
       .trim()
@@ -41,6 +55,17 @@ const LoginAdmin = async (req, res) => {
       .replace(/[\s_-]+/g, "");
 
     if (dbRole !== selectedRole) {
+      await createAuditLog({
+        userName: user.name,
+        userEmail: user.email,
+        userRole: user.role,
+        userId: user._id,
+        action: "FAILED_LOGIN",
+        status: "FAILED",
+        ipAddress,
+        userAgent,
+        details: `Role mismatch: selected '${role}' but assigned '${user.role}'`,
+      });
       return res.status(400).json({
         message: "Invalid role selected. Please select your assigned role.",
       });
@@ -49,10 +74,34 @@ const LoginAdmin = async (req, res) => {
     // ✅ PASSWORD CHECK
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      await createAuditLog({
+        userName: user.name,
+        userEmail: user.email,
+        userRole: user.role,
+        userId: user._id,
+        action: "FAILED_LOGIN",
+        status: "FAILED",
+        ipAddress,
+        userAgent,
+        details: "Incorrect password",
+      });
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // ✅ JWT (ROLE COMES FROM DB VERIFIED RECORD)
+    // ✅ SUCCESS LOG
+    await createAuditLog({
+      userName: user.name,
+      userEmail: user.email,
+      userRole: user.role,
+      userId: user._id,
+      action: "LOGIN",
+      status: "SUCCESS",
+      ipAddress,
+      userAgent,
+      details: "Admin portal login successful",
+    });
+
+    // ✅ JWT
     const token = jwt.sign(
       {
         id: user._id,

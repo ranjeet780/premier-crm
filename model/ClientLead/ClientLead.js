@@ -73,7 +73,16 @@ const ClientLeadSchema = new mongoose.Schema({
   },
 
   leadId: { type: String, unique: true },
-  projects: [{ type: mongoose.Schema.Types.ObjectId, ref: "projects" }]
+  projects: [{ type: mongoose.Schema.Types.ObjectId, ref: "projects" }],
+
+  notes: { type: String, default: "" },
+  discussionNotes: [
+    {
+      note: { type: String, required: true },
+      createdAt: { type: Date, default: Date.now },
+      createdBy: { type: String, default: "" }
+    }
+  ]
 }, { timestamps: true });
 
 ClientLeadSchema.pre('save', async function (next) {

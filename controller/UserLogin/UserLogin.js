@@ -11,6 +11,7 @@ const crypto = require("crypto");
 const Holiday = require("../../model/Holiday/Holiday");
 const Leave = require('../../model/userPannel/Leaves/Leaves');
 const User = require("../../model/Users/Users");
+const { createAuditLog, getClientIp } = require("../../utils/logActivity");
 
 const TIME_ZONE = "Asia/Kolkata";
 const DEFAULT_OFFICE_START = "09:30";
@@ -50,10 +51,36 @@ const UserLogin = async (req, res) => {
   try {
     const { official_email, password } = req.body;
 
+    const ipAddress = getClientIp(req);
+    const userAgent = req.headers["user-agent"] || "Unknown";
+
     /* 1️⃣ AUTH */
     const emp = await SignUp.findOne({ official_email });
-    if (!emp) return res.status(404).json({ message: "Employee not found" });
+    if (!emp) {
+      await createAuditLog({
+        userName: "Unknown",
+        userEmail: official_email,
+        userRole: "employee",
+        action: "FAILED_LOGIN",
+        status: "FAILED",
+        ipAddress,
+        userAgent,
+        details: "Employee email not found",
+      });
+      return res.status(404).json({ message: "Employee not found" });
+    }
     if (emp.isActive === false) {
+      await createAuditLog({
+        userName: emp.ename,
+        userEmail: emp.official_email,
+        userRole: emp.role || "employee",
+        userId: emp._id,
+        action: "FAILED_LOGIN",
+        status: "FAILED",
+        ipAddress,
+        userAgent,
+        details: "Account blocked",
+      });
       return res.status(403).json({
         message: "Your account is blocked. Please contact admin.",
       });
@@ -69,7 +96,20 @@ const UserLogin = async (req, res) => {
         console.error("Auto hash upgrade error:", hErr);
       }
     }
-    if (!ok) return res.status(400).json({ message: "Invalid password" });
+    if (!ok) {
+      await createAuditLog({
+        userName: emp.ename,
+        userEmail: emp.official_email,
+        userRole: emp.role || "employee",
+        userId: emp._id,
+        action: "FAILED_LOGIN",
+        status: "FAILED",
+        ipAddress,
+        userAgent,
+        details: "Incorrect password",
+      });
+      return res.status(400).json({ message: "Invalid password" });
+    }
 
     /* 1.1️⃣ CHECK LOCKED STATUS */
     if (emp.isLocked) {
@@ -94,6 +134,19 @@ const UserLogin = async (req, res) => {
       process.env.JWT_SECRET || "TEMP_SECRET",
       { expiresIn: "1d" }
     );
+
+    // Audit log success
+    await createAuditLog({
+      userName: emp.ename,
+      userEmail: emp.official_email,
+      userRole: emp.role || "employee",
+      userId: emp._id,
+      action: "LOGIN",
+      status: "SUCCESS",
+      ipAddress,
+      userAgent,
+      details: "Employee login successful",
+    });
 
     /* 2️⃣ DATE / TIME (IST) */
     const now = req.body.testDateTime
@@ -255,6 +308,22 @@ const UserLogout = async (req, res) => {
     if (!employeeId) {
       return res.status(400).json({ message: "employeeId is required" });
     }
+
+    const emp = await SignUp.findById(employeeId).catch(() => null);
+    const ipAddress = getClientIp(req);
+    const userAgent = req.headers["user-agent"] || "Unknown";
+
+    await createAuditLog({
+      userName: emp?.ename || "Employee",
+      userEmail: emp?.official_email || "N/A",
+      userRole: emp?.role || "employee",
+      userId: employeeId,
+      action: "LOGOUT",
+      status: "SUCCESS",
+      ipAddress,
+      userAgent,
+      details: "Employee logged out",
+    });
 
     const now = new Date();
     const dateKey = formatDateIST(now);

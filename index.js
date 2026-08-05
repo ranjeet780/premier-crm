@@ -9,6 +9,7 @@
   require("./cronJobs/autoLeaveMarkCron");
   require("./cronJobs/serviceSubscriptionReminderCron");
   require("./cronJobs/taskDeadlineReminderCron");
+  require("./cronJobs/domainExpiryReminderCron");
   //neeww add
   // const { initSocket } = require("./socket");
 const notificationRoutes = require("./Routes/notificationRoutes");
@@ -50,6 +51,7 @@ const notificationForAllRoutes = require("./Routes/notificationForAllRoutes");
   app.use("/api/notifications", notificationRoutes);
   app.use("/api/notifications-all", notificationForAllRoutes);
   app.use("/api/screenshots", require("./Routes/screenshotRoutes"));
+  app.use("/api/audit-logs", require("./Routes/auditLogRoutes"));
   const normalizePermissions = require("./controller/middleware/normalizePermissions");
   const authMiddleware =require('./controller/middleware/authMiddleware')
 

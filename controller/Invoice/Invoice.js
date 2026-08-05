@@ -18,7 +18,7 @@ function generateInvoicePdfBuffer(invoice, company) {
       const contentWidth = pageRight - pageLeft;
 
       doc.font("Helvetica-Bold").fontSize(24).fillColor("#1976be");
-      doc.text("INVOICE", pageLeft, 40, { width: contentWidth, align: "center" });
+      doc.text("PROFORMA INVOICE", pageLeft, 40, { width: contentWidth, align: "center" });
 
       const headerY = 85;
       doc.font("Helvetica-Bold").fontSize(12).fillColor("#1976be").text(company?.name || "Premier Webtech", pageLeft, headerY);
@@ -512,6 +512,15 @@ const createInvoice = async (req, res) => {
     const finalTaxAmount = Number(taxAmount || 0);
     const totalAmount = subTotalAmount + finalTaxAmount;
 
+    const generateInvoiceNumber = () => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const date = String(now.getDate()).padStart(2, "0");
+      const randomNo = Math.floor(1 + Math.random() * 9); // 1 single digit
+      return `INV${year}${month}${date}${randomNo}`;
+    };
+
     /* ---------- CREATE INVOICE ---------- */
     const invoice = new Invoice({
       clientId,
@@ -522,7 +531,7 @@ const createInvoice = async (req, res) => {
       taxName: taxName || "",
       taxAmount: finalTaxAmount,
       projects: normalizedProjects,
-      invoiceNumber: "INV-" + Date.now(),
+      invoiceNumber: generateInvoiceNumber(),
       dueDate,
       paymentMethod: paymentMethod || "UPI",
       currency: currency || "INR",
@@ -605,6 +614,18 @@ const createInvoice = async (req, res) => {
 const getAllInvoices = async (req, res) => {
   try {
     const invoices = await Invoice.find().sort({ date: -1 });
+    for (let inv of invoices) {
+      if (!inv.invoiceNumber || inv.invoiceNumber.startsWith("INV-") || inv.invoiceNumber.length > 12) {
+        const d = new Date(inv.date || inv.createdAt || Date.now());
+        const yr = d.getFullYear();
+        const mo = String(d.getMonth() + 1).padStart(2, "0");
+        const dt = String(d.getDate()).padStart(2, "0");
+        const digits = String(inv.invoiceNumber || "").replace(/\D/g, "");
+        const rand = digits.length >= 1 ? digits.slice(-1) : String(Math.floor(1 + Math.random() * 9));
+        inv.invoiceNumber = `INV${yr}${mo}${dt}${rand}`;
+        await inv.save().catch(() => {});
+      }
+    }
     res.json({ success: true, invoices });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

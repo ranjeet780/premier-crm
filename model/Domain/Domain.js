@@ -22,6 +22,11 @@ const DomainSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    clientEmail: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     purchasedOn: {
       type: Date,
       required: true,
@@ -52,6 +57,10 @@ const DomainSchema = new mongoose.Schema(
       type: String,
       enum: ["domain", "hosting", "email"],
       default: "domain"
+    },
+    reminder_offsets_sent: {
+      type: [Number],
+      default: [],
     }
   },
   { timestamps: true }
