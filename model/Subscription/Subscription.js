@@ -13,6 +13,11 @@ const SubscriptionSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    clientEmail: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     plan: {
       type: String,
       required: true,

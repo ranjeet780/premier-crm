@@ -68,6 +68,7 @@ const taskSchema = new mongoose.Schema(
     ],
 
     reminder_offsets_sent: { type: [Number], default: [] },
+    overdueNotificationSent: { type: Boolean, default: false },
 
     TaskId: { type: String }
   },
@@ -78,6 +79,7 @@ const taskSchema = new mongoose.Schema(
 taskSchema.pre("save", function (next) {
   if (this.isModified("dueDate")) {
     this.reminder_offsets_sent = [];
+    this.overdueNotificationSent = false;
   }
   next();
 });

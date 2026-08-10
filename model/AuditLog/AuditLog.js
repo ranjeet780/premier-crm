@@ -37,6 +37,10 @@ const AuditLogSchema = new mongoose.Schema(
       type: String,
       default: "Unknown",
     },
+    deviceName: {
+      type: String,
+      default: "Unknown Device",
+    },
     details: {
       type: String,
       default: "",

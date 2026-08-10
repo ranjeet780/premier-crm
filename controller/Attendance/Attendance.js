@@ -640,20 +640,51 @@ const startBreak = async (req, res) => {
     const startOfDay = parseISTLocalToUTC(dateKey, "00:00:00");
     const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
-    const attendance = await Attendance.findOne({
+    let attendance = await Attendance.findOne({
       empId: emp._id,
       date: { $gte: startOfDay, $lt: endOfDay }
     });
 
-    if (!attendance || !attendance.check_in) {
-      return res.status(400).json({ message: "You must check-in first before starting a break." });
+    const timeStr = formatTime(now);
+
+    if (!attendance) {
+      try {
+        attendance = new Attendance({
+          empId: emp._id,
+          date: startOfDay,
+          check_in: timeStr,
+          status: "Present",
+          breakStart: timeStr,
+          currentBreakStartRaw: now,
+          breakStatus: "On Break",
+          breaks: []
+        });
+        await attendance.save();
+        return res.json({
+          message: "Break started successfully",
+          attendance
+        });
+      } catch (saveErr) {
+        if (saveErr.code === 11000) {
+          attendance = await Attendance.findOne({
+            empId: emp._id,
+            date: { $gte: startOfDay, $lt: endOfDay }
+          });
+        } else {
+          throw saveErr;
+        }
+      }
+    }
+
+    if (!attendance.check_in) {
+      attendance.check_in = timeStr;
+      attendance.status = "Present";
     }
 
     if (attendance.breakStatus === "On Break") {
       return res.status(400).json({ message: "You are already on break." });
     }
 
-    const timeStr = formatTime(now);
     attendance.breakStart = timeStr;
     attendance.currentBreakStartRaw = now;
     attendance.breakStatus = "On Break";

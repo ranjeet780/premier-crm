@@ -1,10 +1,13 @@
-// controller/Task/Task.js
 const mongoose = require("mongoose");
 const Task = require("../../model/Task/Task");
 const SignUp = require("../../model/SignUp/SignUp");
-const Project = require('../../model/Project/Projects')
-const Notification = require('../../model/Notification/adminNotification')
+const User = require("../../model/Users/Users");
+const Project = require('../../model/Project/Projects');
+const Notification = require('../../model/Notification/adminNotification');
 const EmployeeNotification = require("../../model/Notification/Notification");
+const NotificationForAll = require("../../model/Notification/NotificationForAll");
+const { ALL_ROLES } = require("../../utils/roles");
+const { getIO } = require("../../socket");
 const path = require("path");
 const fs = require("fs");
 
@@ -76,8 +79,12 @@ const newTask = new Task({
 
     const saveTask = await newTask.save();
 
+    let empNames = "";
     if (Array.isArray(assignedTo) && assignedTo.length > 0) {
       const uniqueEmployeeIds = [...new Set(assignedTo.map((id) => String(id)))];
+      const employees = await SignUp.find({ _id: { $in: uniqueEmployeeIds } }).select("ename name email");
+      empNames = employees.map((e) => e.ename || e.name || e.email).filter(Boolean).join(", ");
+
       await Promise.all(
         uniqueEmployeeIds.map((empId) =>
           EmployeeNotification.create({
@@ -92,6 +99,39 @@ const newTask = new Task({
           })
         )
       );
+    }
+
+    // 🔔 Notify Superadmin & Admin about the new task assignment
+    try {
+      const creatorUser = req.user?._id;
+      const creatorRole = req.user?.role || "system";
+      const systemUser =
+        creatorUser ||
+        (await User.findOne({ role: "superadmin" }).select("_id"))?._id ||
+        (await SignUp.findOne({ role: "superadmin" }).select("_id"))?._id ||
+        (await SignUp.findOne().select("_id"))?._id;
+
+      const assignInfo = empNames ? ` to ${empNames}` : "";
+
+      const adminNotification = await NotificationForAll.create({
+        type: "TASK_ASSIGNED",
+        title: "New Task Assigned",
+        message: `Task "${title}" was assigned${assignInfo}.`,
+        module: "task",
+        refId: saveTask._id,
+        createdByUser: systemUser,
+        createdByRole: creatorRole,
+        visibleToRoles: ["superadmin", "admin", "manager"],
+      });
+
+      const io = getIO();
+      if (io) {
+        ["superadmin", "admin", "manager"].forEach((role) => {
+          io.to(`role:${role}`).emit("new-notification", adminNotification);
+        });
+      }
+    } catch (notifError) {
+      console.error("Task assignment notification error:", notifError);
     }
 
     return res.status(200).json({ message: "Task Assigned Successfully ✅", task: saveTask });
@@ -232,8 +272,24 @@ const updateTask = async (req, res) => {
       });
     }
 
+    if (body.status === "Completed") {
+      const now = new Date();
+      const effectiveDueDate = body.dueDate ? new Date(body.dueDate) : (existingTask.dueDate ? new Date(existingTask.dueDate) : null);
+      if (effectiveDueDate && effectiveDueDate < now) {
+        return res.status(400).json({
+          message: "This task is past its due date and cannot be marked as Completed. Please extend the due date first."
+        });
+      }
+    }
+
     if (body.dueDate) {
       body.reminder_offsets_sent = [];
+      body.overdueNotificationSent = false;
+      const dateObj = new Date(body.dueDate);
+      if (!isNaN(dateObj) && typeof body.dueDate === "string" && body.dueDate.length === 10) {
+        dateObj.setHours(23, 59, 59, 999);
+        body.dueDate = dateObj;
+      }
     }
 
     const updatedTask = await Task.findByIdAndUpdate(
@@ -245,6 +301,41 @@ const updateTask = async (req, res) => {
       .populate("clientId", "leadName")
       .populate("projectId", "projectName")
       .populate("serviceId", "serviceName");
+
+    if (body.assignedTo && Array.isArray(body.assignedTo) && body.assignedTo.length > 0) {
+      try {
+        const uniqueEmployeeIds = [...new Set(body.assignedTo.map((id) => String(id)))];
+        const employees = await SignUp.find({ _id: { $in: uniqueEmployeeIds } }).select("ename name email");
+        const empNames = employees.map((e) => e.ename || e.name || e.email).filter(Boolean).join(", ");
+        const assignInfo = empNames ? ` to ${empNames}` : "";
+
+        const systemUser =
+          req.user?._id ||
+          (await User.findOne({ role: "superadmin" }).select("_id"))?._id ||
+          (await SignUp.findOne({ role: "superadmin" }).select("_id"))?._id ||
+          (await SignUp.findOne().select("_id"))?._id;
+
+        const adminNotification = await NotificationForAll.create({
+          type: "TASK_ASSIGNED",
+          title: "Task Reassigned / Updated",
+          message: `Task "${updatedTask.title}" was assigned${assignInfo}.`,
+          module: "task",
+          refId: updatedTask._id,
+          createdByUser: systemUser,
+          createdByRole: req.user?.role || "system",
+          visibleToRoles: ["superadmin", "admin", "manager"],
+        });
+
+        const io = getIO();
+        if (io) {
+          ["superadmin", "admin", "manager"].forEach((role) => {
+            io.to(`role:${role}`).emit("new-notification", adminNotification);
+          });
+        }
+      } catch (notifErr) {
+        console.error("Update task notification error:", notifErr);
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -265,14 +356,8 @@ const deleteTask = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found" });
 
-    if (String(task.status || "").toLowerCase() === "completed") {
-      return res.status(400).json({
-        message: "Completed tasks are locked and cannot be deleted."
-      });
-    }
-
     await Task.findByIdAndDelete(taskId);
-    res.status(200).json({ success: true, message: "Task deleted" });
+    res.status(200).json({ success: true, message: "Task deleted successfully" });
   } catch (err) {
     console.error("deleteTask:", err);
     res.status(500).json({ message: err.message });
@@ -430,6 +515,15 @@ const updateTaskStatus = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
+    }
+
+    if (status === "Completed") {
+      const now = new Date();
+      if (task.dueDate && new Date(task.dueDate) < now) {
+        return res.status(400).json({
+          message: "This task is past its due date and cannot be marked as Completed. Please contact your admin to extend the due date."
+        });
+      }
     }
 
     if (!task.statusHistory) task.statusHistory = [];
@@ -618,6 +712,58 @@ const getStatusAttachmentForAdmin = async (req, res) => {
 
 
 
+const extendTaskDueDate = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { newDueDate, reason } = req.body;
+
+    if (!newDueDate) {
+      return res.status(400).json({ message: "New due date is required." });
+    }
+
+    const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ message: "Task not found." });
+    }
+
+    if (String(task.status || "").toLowerCase() === "completed") {
+      return res.status(400).json({ message: "Completed tasks cannot be extended." });
+    }
+
+    let extendedDate = new Date(newDueDate);
+    if (isNaN(extendedDate.getTime())) {
+      return res.status(400).json({ message: "Invalid date format." });
+    }
+
+    if (typeof newDueDate === "string" && newDueDate.length === 10) {
+      extendedDate.setHours(23, 59, 59, 999);
+    }
+
+    task.dueDate = extendedDate;
+    task.reminder_offsets_sent = [];
+    task.overdueNotificationSent = false;
+
+    if (reason) {
+      if (!task.comments) task.comments = [];
+      task.comments.push({
+        text: `📅 Due date extended to ${extendedDate.toLocaleDateString()} by Admin. Reason: ${reason}`,
+        createdAt: new Date(),
+      });
+    }
+
+    await task.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Due date successfully extended to ${extendedDate.toLocaleDateString()}`,
+      task,
+    });
+  } catch (err) {
+    console.error("EXTEND DUE DATE ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
 module.exports = {
   addTask,
   getAllTasks,
@@ -635,5 +781,6 @@ module.exports = {
   getEmployeesByServiceInTask,
   autoStopTimer,
   getTaskStatusHistoryForAdmin,
-  getStatusAttachmentForAdmin
+  getStatusAttachmentForAdmin,
+  extendTaskDueDate
 };

@@ -15,6 +15,7 @@ const getAuditLogs = async (req, res) => {
         { userEmail: searchRegex },
         { details: searchRegex },
         { ipAddress: searchRegex },
+        { deviceName: searchRegex },
       ];
     }
 

@@ -25,6 +25,7 @@ async function sendProposalEmail({
   category,
   services,
   terms,
+  clientCompanyDetail,
   files = [],
 }) {
   // ✅ SAME LOGIN AS INVOICE
@@ -68,6 +69,89 @@ async function sendProposalEmail({
     </div>`;
   }
 
+  // Badges (optional)
+  const getBadgePath = (filename) => {
+    const candidate1 = path.join(__dirname, "..", "uploads", "badges", filename);
+    if (fs.existsSync(candidate1)) return candidate1;
+    const candidate2 = path.join(__dirname, "..", "..", "uploads", "badges", filename);
+    if (fs.existsSync(candidate2)) return candidate2;
+    const candidate3 = path.join(process.cwd(), "uploads", "badges", filename);
+    if (fs.existsSync(candidate3)) return candidate3;
+    return null;
+  };
+
+  const b1 = getBadgePath("page3_punjab_award.png");
+  const b2 = getBadgePath("iso_9001_certified.jpg");
+  const b3 = getBadgePath("three_best_rated.png");
+
+  let badgesHtml = "";
+  if (b1) {
+    attachments.push({
+      filename: "page3_punjab_award.png",
+      content: fs.readFileSync(b1),
+      cid: "badge1",
+    });
+  }
+  if (b2) {
+    attachments.push({
+      filename: "iso_9001_certified.jpg",
+      content: fs.readFileSync(b2),
+      cid: "badge2",
+    });
+  }
+  if (b3) {
+    attachments.push({
+      filename: "three_best_rated.png",
+      content: fs.readFileSync(b3),
+      cid: "badge3",
+    });
+  }
+
+  if (b1 || b2 || b3) {
+    badgesHtml = `
+      <div style="margin-top: 12px; margin-bottom: 12px;">
+        <table cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            ${b1 ? `<td style="padding-right: 15px; vertical-align: middle;"><img src="cid:badge1" alt="Page3 Punjab Excellence Award" style="height: 65px; width: auto; display: block;" /></td>` : ""}
+            ${b2 ? `<td style="padding-right: 15px; vertical-align: middle;"><img src="cid:badge2" alt="ISO 9001 Certified" style="height: 65px; width: auto; display: block;" /></td>` : ""}
+            ${b3 ? `<td style="padding-right: 15px; vertical-align: middle;"><img src="cid:badge3" alt="ThreeBestRated Excellence" style="height: 65px; width: auto; display: block;" /></td>` : ""}
+          </tr>
+        </table>
+      </div>
+    `;
+  }
+
+  let clientCompanyHtml = "";
+  let detailObj = clientCompanyDetail;
+  if (typeof detailObj === "string") {
+    try {
+      detailObj = JSON.parse(detailObj);
+    } catch (e) {
+      console.error("Error parsing clientCompanyDetail in email:", e);
+    }
+  }
+
+  const isShowCompanyDetail = !!(
+    detailObj &&
+    (detailObj.showCompanyDetail === true ||
+      detailObj.showCompanyDetail === "true" ||
+      (detailObj.companyName && detailObj.companyName.trim()) ||
+      (detailObj.address && detailObj.address.trim()))
+  );
+
+  if (isShowCompanyDetail && detailObj) {
+    clientCompanyHtml = `
+      <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+        <h3 style="margin-top: 0; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">Client Company Details</h3>
+        <p style="margin: 6px 0;"><strong>Company Name:</strong> ${detailObj.companyName || "N/A"}</p>
+        <p style="margin: 6px 0;"><strong>Phone:</strong> ${detailObj.phone || "N/A"}</p>
+        <p style="margin: 6px 0;"><strong>Address:</strong> ${detailObj.address || "N/A"}</p>
+        ${detailObj.gstNumber ? `<p style="margin: 6px 0;"><strong>GST Number:</strong> ${detailObj.gstNumber}</p>` : ""}
+        ${detailObj.email ? `<p style="margin: 6px 0;"><strong>Company Email:</strong> ${detailObj.email}</p>` : ""}
+      </div>
+    `;
+  }
+
     await transporter.sendMail({
       from: `"${companyName}" <${process.env.EMAIL_USER}>`,
       replyTo: companyEmail,
@@ -87,6 +171,8 @@ async function sendProposalEmail({
             <p style="margin: 6px 0;"><strong>Phone:</strong> ${clientPhone || "N/A"}</p>
           </div>
 
+          ${clientCompanyHtml}
+
           <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
             <h3 style="margin-top: 0; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">Proposal Details</h3>
             <p style="margin: 6px 0;"><strong>Title:</strong> ${title}</p>
@@ -96,11 +182,11 @@ async function sendProposalEmail({
           </div>
 
           <p><strong>Services:</strong></p>
-          <ul>
-            ${services
+          <ul style="margin: 8px 0; padding-left: 20px; color: #334155;">
+            ${(services || [])
               .map(
                 (s) =>
-                  `<li>${s.name} - ₹${Number(s.price).toLocaleString()}</li>`
+                  `<li style="margin: 10px 0;">Service - <strong>${s.name || s.serviceName || "Service"}</strong><br/>Duration - ${s.duration || "1 Year"}<br/>Expires On - ${s.expiresOn || "N/A"}</li>`
               )
               .join("")}
           </ul>
@@ -109,11 +195,54 @@ async function sendProposalEmail({
             .reduce((a, s) => a + Number(s.price || 0), 0)
             .toLocaleString()}</p>
 
-          <p><strong>Terms:</strong> ${terms}</p>
+          <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin-top: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+            <h3 style="margin-top: 0; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">The other services we deal in</h3>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 10px;">
+              <tr>
+                <td width="50%" valign="top">
+                  <ul style="margin: 0; padding-left: 18px; color: #334155;">
+                    <li style="margin: 6px 0;">Digital Marketing</li>
+                    <li style="margin: 6px 0;">SEO (Website Up ranking)</li>
+                    <li style="margin: 6px 0;">Web Development</li>
+                    <li style="margin: 6px 0;">Graphic Designing</li>
+                    <li style="margin: 6px 0;">Android and IOS App Development</li>
+                  </ul>
+                </td>
+                <td width="50%" valign="top">
+                  <ul style="margin: 0; padding-left: 18px; color: #334155;">
+                    <li style="margin: 6px 0;">Software Customisation</li>
+                    <li style="margin: 6px 0;">Video Editing</li>
+                    <li style="margin: 6px 0;">IT Consulting</li>
+                    <li style="margin: 6px 0;">Trainings and Internships.</li>
+                  </ul>
+                </td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin-top: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+            <h3 style="margin-top: 0; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">Terms & Conditions</h3>
+            ${terms ? `<p style="margin: 6px 0;"><strong>Specific Terms:</strong> ${terms}</p>` : ""}
+            <ul style="margin: 8px 0; padding-left: 20px; color: #334155; line-height: 1.5;">
+              <li style="margin: 6px 0;"><strong>Payment:</strong> 50% advance is required before project commencement, and the remaining 50% must be paid before the website goes live.</li>
+              <li style="margin: 6px 0;"><strong>Free Support:</strong> 6 months free support after project completion. Thereafter, AMC charges will apply for further support and maintenance.</li>
+              <li style="margin: 6px 0;"><strong>Requirements & Timeline:</strong> The client must provide all required content, information, credentials and approvals on time. Any delay from the client's side may affect the project delivery timeline.</li>
+              <li style="margin: 6px 0;"><strong>Additional Work:</strong> Any new features, pages, major changes or requirements not included in the approved proposal will be charged separately.</li>
+              <li style="margin: 6px 0;"><strong>E-Commerce/Data Entry:</strong> Product uploading and data entry beyond the agreed quantity/scope will be charged separately.</li>
+              <li style="margin: 6px 0;"><strong>Third-Party Services:</strong> Any third-party API, plugin, payment gateway, hosting, domain, SMS, WhatsApp or other service charges will be borne by the client unless specifically included in the proposal.</li>
+              <li style="margin: 6px 0;"><strong>Digital Marketing:</strong> Monthly digital marketing charges are payable in advance. Advertising spend/budget is separate unless mentioned otherwise. Results such as rankings, leads or sales cannot be guaranteed.</li>
+              <li style="margin: 6px 0;"><strong>Content & Approval:</strong> The client is responsible for providing accurate content and timely approvals. Delays in approvals may affect the scheduled delivery/posting timeline.</li>
+              <li style="margin: 6px 0;"><strong>Cancellation:</strong> Payments for completed work or services already provided are non-refundable.</li>
+              <li style="margin: 6px 0;"><strong>Maintenance & Updates:</strong> No major changes to the website layout or design will be included. Minor updates and content changes can be done free of cost during the 6-month maintenance period.</li>
+              <li style="margin: 6px 0;"><strong>Proposal Scope:</strong> The approved proposal/quotation will define the final scope, timeline, deliverables and applicable charges.</li>
+            </ul>
+          </div>
 
           <br/>
-          <p>Regards,<br/>
-          <strong>${companyName}</strong></p>
+          <p style="margin: 0; padding: 0;">Regards,</p>
+          <p style="margin: 4px 0 0 0; font-weight: bold; color: #0f172a; text-transform: uppercase;">${companyName.toUpperCase().includes("SOLUTIONS") ? companyName.toUpperCase() : `${companyName.toUpperCase()} SOLUTIONS`}</p>
+          ${badgesHtml}
+          <p style="margin: 6px 0 0 0; color: #334155; font-size: 14px;"><strong>Phone:</strong> 9779770059</p>
         </div>
       `,
       attachments,
@@ -138,6 +267,25 @@ const createAndSendProposal = async (req, res) => {
 
     const parsedServices = JSON.parse(services || "[]");
     const parsedCategory = JSON.parse(category || "[]");
+
+    let parsedClientCompanyDetail = { showCompanyDetail: false };
+    if (req.body.clientCompanyDetail) {
+      try {
+        parsedClientCompanyDetail = typeof req.body.clientCompanyDetail === "string"
+          ? JSON.parse(req.body.clientCompanyDetail)
+          : req.body.clientCompanyDetail;
+      } catch (e) {
+        console.error("Error parsing clientCompanyDetail:", e);
+      }
+    }
+    const isShowCompanyDetail =
+      req.body.showClientCompanyDetail === "true" ||
+      req.body.showClientCompanyDetail === true ||
+      parsedClientCompanyDetail.showCompanyDetail === true ||
+      parsedClientCompanyDetail.showCompanyDetail === "true";
+
+    parsedClientCompanyDetail.showCompanyDetail = isShowCompanyDetail;
+
     const insights = analyzeProposalDraft({
       title,
       services: parsedServices,
@@ -155,6 +303,7 @@ const createAndSendProposal = async (req, res) => {
       services: parsedServices,
       description,
       companyDescription,
+      clientCompanyDetail: parsedClientCompanyDetail,
       category: parsedCategory,
       terms,
       attachments: (req.files || []).map((f) => f.originalname),
@@ -195,6 +344,7 @@ const createAndSendProposal = async (req, res) => {
             category: parsedCategory,
             services: parsedServices,
             terms,
+            clientCompanyDetail: parsedClientCompanyDetail,
             files: (req.files || []).map((file) => ({
               filename: file.originalname,
               content: file.buffer,
@@ -232,6 +382,25 @@ const updateProposal = async (req, res) => {
     // Parse services and category JSON strings to arrays
     const parsedServices = services ? JSON.parse(services) : [];
     const parsedCategory = category ? JSON.parse(category) : [];
+
+    let parsedClientCompanyDetail = { showCompanyDetail: false };
+    if (req.body.clientCompanyDetail) {
+      try {
+        parsedClientCompanyDetail = typeof req.body.clientCompanyDetail === "string"
+          ? JSON.parse(req.body.clientCompanyDetail)
+          : req.body.clientCompanyDetail;
+      } catch (e) {
+        console.error("Error parsing clientCompanyDetail:", e);
+      }
+    }
+    const isShowCompanyDetail =
+      req.body.showClientCompanyDetail === "true" ||
+      req.body.showClientCompanyDetail === true ||
+      parsedClientCompanyDetail.showCompanyDetail === true ||
+      parsedClientCompanyDetail.showCompanyDetail === "true";
+
+    parsedClientCompanyDetail.showCompanyDetail = isShowCompanyDetail;
+
     const insights = analyzeProposalDraft({
       title,
       services: parsedServices,
@@ -261,6 +430,7 @@ const updateProposal = async (req, res) => {
         title,
         description,
         companyDescription,
+        clientCompanyDetail: parsedClientCompanyDetail,
         terms,
         status: status || (sendEmail === "false" ? "Draft" : "Sent"),
         services: parsedServices,
@@ -356,6 +526,7 @@ const updateProposal = async (req, res) => {
             category: updatedProposal.category || [],
             services: updatedProposal.services || [],
             terms: updatedProposal.terms,
+            clientCompanyDetail: updatedProposal.clientCompanyDetail,
             files: emailAttachments,
           });
         } catch (mailErr) {
@@ -409,7 +580,7 @@ const getProposalById = async (req, res) => {
   try {
     const { id } = req.params;
     const proposal = await Proposal.findById(id)
-      .populate("clientId", "leadName emailId phoneNo")
+      .populate("clientId", "leadName emailId phoneNo address companyName gstNumber personal_email")
       .lean();
     if (!proposal) {
       return res.status(404).json({ message: "Proposal not found" });

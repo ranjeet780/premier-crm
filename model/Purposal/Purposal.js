@@ -4,9 +4,17 @@ const Counter = require('../Counter/Counter');
 const ProposalSchema = new mongoose.Schema({
   clientId: { type: mongoose.Schema.Types.ObjectId, ref: "ClientLeads", required: true },
   title: String,
-  services: [{ id: String, name: String, price: Number }],
+  services: [{ id: String, name: String, price: Number, duration: String, expiresOn: String }],
   description: String,
   companyDescription: String,
+  clientCompanyDetail: {
+    showCompanyDetail: { type: Boolean, default: false },
+    companyName: { type: String, default: "" },
+    phone: { type: String, default: "" },
+    address: { type: String, default: "" },
+    gstNumber: { type: String, default: "" },
+    email: { type: String, default: "" },
+  },
   category: [{ type: String }],
   price: Number,
   terms: String,

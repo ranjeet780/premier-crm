@@ -1,12 +1,15 @@
 const Service = require("../../model/Services/Service");
 const ServiceSubscription = require("../../model/Services/ServiceSubscription");
 const Subscription = require("../../model/Subscription/Subscription");
+const ClientLead = require("../../model/ClientLead/ClientLead");
+const Company = require("../../model/CompanyDetails/CompanyDetails");
 const Department = require("../../model/Department/AddDepartment");
 const Project = require("../../model/Project/Projects");
 const NotificationForAll = require("../../model/Notification/NotificationForAll");
 const { ALL_ROLES } = require("../../utils/roles");
 const { getIO } = require("../../socket");
 const createRoleBasedNotification = require("../../utils/createRoleBasedNotification");
+const { sendClientSubscriptionEmail } = require("../../cronJobs/serviceSubscriptionReminderCron");
 
 const VALID_RENEWAL_TYPES = [
   "weekly",
@@ -167,6 +170,7 @@ const syncSubscriptionDashboardEntry = async ({
   duration,
   renewalType,
   subscriber,
+  clientEmail,
   plan,
   billingCycle,
   paymentMethod,
@@ -190,6 +194,7 @@ const syncSubscriptionDashboardEntry = async ({
     {
       sourceServiceId,
       subscriber: String(subscriber || safeServiceName).trim(),
+      clientEmail: String(clientEmail || "").trim(),
       plan: String(plan || safeServiceName).trim(),
       billingCycle: String(
         billingCycle || toLegacyBillingCycle(normalizedRenewalType) || normalizedRenewalType
@@ -217,6 +222,7 @@ const addService = async (req, res) => {
       deptId,
       is_recurring,
       subscriber,
+      clientEmail,
       plan,
       billingCycle,
       paymentMethod,
@@ -335,6 +341,7 @@ const addService = async (req, res) => {
         duration,
         renewalType,
         subscriber,
+        clientEmail,
         plan,
         billingCycle,
         paymentMethod,
@@ -582,6 +589,40 @@ const sendTestServiceReminder = async (req, res) => {
       console.warn("Socket not initialized for test reminder emit:", socketError.message);
     }
 
+    // Also send test email to Client Email
+    const serviceId = subscription.service_id?._id || subscription.service_id;
+    const subDoc = await Subscription.findOne({ sourceServiceId: serviceId });
+    let recipientEmail = subDoc?.clientEmail ? subDoc.clientEmail.trim() : "";
+    let subscriberName = subDoc?.subscriber || serviceLabel;
+
+    if (!recipientEmail && subscriberName) {
+      const clientLead = await ClientLead.findOne({
+        $or: [
+          { leadName: new RegExp(`^${subscriberName.trim()}$`, "i") },
+          { ename: new RegExp(`^${subscriberName.trim()}$`, "i") },
+        ],
+      }).select("emailId email");
+      if (clientLead) {
+        recipientEmail = clientLead.emailId || clientLead.email || "";
+      }
+    }
+
+    if (recipientEmail && sendClientSubscriptionEmail) {
+      const companyDoc = await Company.findOne().catch(() => null);
+      await sendClientSubscriptionEmail({
+        recipientEmail,
+        subscriberName,
+        serviceName: serviceLabel,
+        plan: subDoc?.plan || serviceLabel,
+        billingCycle: subDoc?.billingCycle || subscription.renewal_type || "Monthly",
+        nextBillingDate: subscription.next_billing_date,
+        amount: subDoc?.amount || subscription.amount || 0,
+        bankDetails: companyDoc?.bank,
+        offset: 0,
+        isTest: true,
+      });
+    }
+
     return res.status(200).json({
       message: "Test reminder sent successfully",
       data: notification,
@@ -637,6 +678,7 @@ const updateService = async (req, res) => {
       deptId,
       is_recurring,
       subscriber,
+      clientEmail,
       plan,
       billingCycle,
       paymentMethod,
@@ -705,6 +747,7 @@ const updateService = async (req, res) => {
         duration,
         renewalType,
         subscriber,
+        clientEmail,
         plan,
         billingCycle,
         paymentMethod,

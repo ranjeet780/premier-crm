@@ -55,6 +55,7 @@ const createSubscription = async (req, res) => {
   try {
     const {
       subscriber,
+      clientEmail,
       plan,
       billingCycle,
       paymentMethod,
@@ -90,6 +91,7 @@ const createSubscription = async (req, res) => {
 
     const subscription = await Subscription.create({
       subscriber: String(subscriber).trim(),
+      clientEmail: String(clientEmail || "").trim(),
       plan: String(plan).trim(),
       billingCycle: String(billingCycle).trim(),
       paymentMethod: String(paymentMethod).trim(),

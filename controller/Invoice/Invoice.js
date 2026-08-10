@@ -729,10 +729,10 @@ const addPayment = async (req, res) => {
     });
 
     // Update totals and status
-    invoice.paidAmount += Number(amount);
-    invoice.remainingAmount = Math.max(invoice.totalAmount - invoice.paidAmount, 0);
+    invoice.paidAmount = (invoice.paidAmount || 0) + Number(amount);
+    invoice.remainingAmount = Math.max((invoice.totalAmount || 0) - invoice.paidAmount, 0);
 
-    if (invoice.paidAmount >= invoice.totalAmount) {
+    if (invoice.paidAmount >= (invoice.totalAmount || 0)) {
       invoice.status = "Paid";
       invoice.paidAt = new Date();
     } else if (invoice.paidAmount > 0) {
@@ -750,7 +750,7 @@ const addPayment = async (req, res) => {
     });
   } catch (err) {
     console.error("Error adding payment:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ success: false, message: err.message || "Server error" });
   }
 };
 
