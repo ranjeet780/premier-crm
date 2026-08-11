@@ -209,24 +209,7 @@ const UserLogin = async (req, res) => {
     });
 
     /* 6️⃣ EXISTING ATTENDANCE (PREVENT DOUBLE LOGIN) */
-    const existing = await Attendance.findOne({
-      empId: emp._id,
-      date: todayMidnight,
-    });
-
-    if (existing) {
-      if (existing.check_out) {
-        existing.check_out = null;
-        await existing.save();
-      }
-      return sendLoginResponse(res, emp, token, {
-        attendanceStatus: existing.status,
-        check_in: existing.check_in,
-        lateMinutes: existing.isLateMinutes || 0,
-        message: "Attendance already marked for today",
-      });
-    }
-    /* 7️⃣ OFFICE CONFIG (ADMIN OVERRIDABLE) */
+    /* 6️⃣ OFFICE CONFIG (ADMIN OVERRIDABLE) */
     const officeStart = emp.officeStart || DEFAULT_OFFICE_START;
     const officeEnd = emp.officeEnd || DEFAULT_OFFICE_END;
     const graceMinutes =
@@ -234,17 +217,16 @@ const UserLogin = async (req, res) => {
         ? emp.graceMinutes
         : DEFAULT_GRACE_MINUTES;
 
-    /* 8️⃣ TIME CALCULATIONS */
+    /* 7️⃣ TIME CALCULATIONS */
     const loginMinutes = toMinutes(timeStr);
     const officeStartMinutes = toMinutes(officeStart);
     const graceEndMinutes = officeStartMinutes + graceMinutes;
-    const officeEndMinutes = toMinutes(officeEnd);
     const halfDayCutoffMinutes = toMinutes(DEFAULT_HALF_DAY_CUTOFF);
 
     let status = "Present";
     let lateMinutes = 0;
 
-    /* 9️⃣ LEAVE LOGIC FIRST */
+    /* 8️⃣ LEAVE LOGIC FIRST */
     if (leave) {
       if (leave.isHalfDay) {
         status = "Half Day";
@@ -252,23 +234,61 @@ const UserLogin = async (req, res) => {
         status = leave.paid ? "Paid Leave" : "Unpaid Leave";
       }
     }
-
-    /* 🔟 NO LEAVE → APPLY TIME RULES */
+    /* 9️⃣ NO LEAVE → APPLY TIME RULES (LOGGED IN USER IS PRESENT OR HALF DAY, NEVER ABSENT) */
     else {
       if (loginMinutes <= graceEndMinutes) {
         status = "Present";
+        lateMinutes = 0;
       } else if (loginMinutes <= halfDayCutoffMinutes) {
         status = "Present";
         lateMinutes = loginMinutes - graceEndMinutes;
-      } else if (loginMinutes <= officeEndMinutes) {
+      } else {
         status = "Half Day";
         lateMinutes = loginMinutes - graceEndMinutes;
-      } else {
-        status = "Absent";
       }
     }
 
-    /* 1️⃣1️⃣ SAVE ATTENDANCE */
+    /* 🔟 EXISTING ATTENDANCE HANDLING */
+    const existing = await Attendance.findOne({
+      empId: emp._id,
+      date: todayMidnight,
+    });
+
+    if (existing) {
+      // If user already had a valid check-in today and was NOT marked Absent, keep their check_in
+      if (existing.check_in && (existing.status || "").toLowerCase() !== "absent") {
+        if (existing.check_out) {
+          existing.check_out = null;
+          await existing.save();
+        }
+        return sendLoginResponse(res, emp, token, {
+          attendanceStatus: existing.status,
+          check_in: existing.check_in,
+          lateMinutes: existing.isLateMinutes || 0,
+          message: "Attendance already marked for today",
+        });
+      }
+
+      // If user had no check_in (e.g. pre-created auto-absent by cron) or was status: "Absent", update it with real check-in!
+      existing.check_in = timeStr;
+      existing.status = status;
+      existing.isLateMinutes = lateMinutes;
+      existing.isAutoMarkedAbsent = false;
+      existing.officeStart = officeStart;
+      existing.officeEnd = officeEnd;
+      existing.graceMinutes = graceMinutes;
+      existing.dailyWorkingHours = emp.dailyWorkingHours;
+      existing.check_out = null;
+      await existing.save();
+
+      return sendLoginResponse(res, emp, token, {
+        attendanceStatus: status,
+        lateMinutes,
+        check_in: timeStr,
+      });
+    }
+
+    /* 1️⃣1️⃣ NEW ATTENDANCE RECORD */
     await Attendance.create({
       empId: emp._id,
       date: todayMidnight,

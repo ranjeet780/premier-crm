@@ -2,6 +2,21 @@ const express = require("express");
 const router = express.Router();
 const Screenshot = require("../model/ActivityLog/Screenshot");
 
+function calculateLateMinutes(checkInTimeStr, officeStartStr = "09:30", graceMin = 10) {
+  if (!checkInTimeStr) return 0;
+  const [h, m] = String(checkInTimeStr).split(":").map(Number);
+  const [startH, startM] = String(officeStartStr).split(":").map(Number);
+
+  const checkInMins = h * 60 + (m || 0);
+  const startMins = startH * 60 + (startM || 0);
+  const graceEndMins = startMins + Number(graceMin || 10);
+
+  if (checkInMins > graceEndMins) {
+    return checkInMins - graceEndMins;
+  }
+  return 0;
+}
+
 // POST /api/screenshots/upload
 // Expects: { employeeId, imageBuffer, currentRoute }
 router.post("/upload", async (req, res) => {
@@ -37,12 +52,39 @@ router.post("/upload", async (req, res) => {
       const user = await SignUp.findById(employeeId);
       const intervalSec = user?.screenshotInterval || 300;
 
-      const att = await Attendance.findOne({
+      let att = await Attendance.findOne({
         empId: employeeId,
         date: { $gte: startOfDay, $lt: endOfDay }
       });
 
+      const { formatTime } = require("../utils/dateUtils");
+      const timeStr = formatTime(now);
+
+      if (!att) {
+        att = new Attendance({
+          empId: employeeId,
+          date: startOfDay,
+          check_in: timeStr,
+          status: "Present",
+          isAutoMarkedAbsent: false,
+          officeStart: user?.officeStart || "09:30",
+          officeEnd: user?.officeEnd || "18:30",
+          graceMinutes: user?.graceMinutes || 10,
+          dailyWorkingHours: user?.dailyWorkingHours,
+        });
+      }
+
       if (att) {
+        if (!att.check_in || (att.status || "").toLowerCase() === "absent") {
+          att.check_in = att.check_in || timeStr;
+          att.status = "Present";
+          att.isAutoMarkedAbsent = false;
+        }
+
+        const officeStart = att.officeStart || user?.officeStart || "09:30";
+        const graceMinutes = typeof att.graceMinutes === "number" ? att.graceMinutes : (user?.graceMinutes || 10);
+        att.isLateMinutes = calculateLateMinutes(att.check_in, officeStart, graceMinutes);
+
         // Increment working hours by actual tracked elapsed time, capped at interval + buffer
         let addedSec = trackedSeconds !== undefined && !isNaN(Number(trackedSeconds)) 
           ? Number(trackedSeconds) 

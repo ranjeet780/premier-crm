@@ -16,6 +16,21 @@ function getBreakDurationMinutes(startRaw, checkOutTimeStr) {
   return Number(minutes.toFixed(2));
 }
 
+function calculateLateMinutes(checkInTimeStr, officeStartStr = "09:30", graceMin = 10) {
+  if (!checkInTimeStr) return 0;
+  const [h, m] = String(checkInTimeStr).split(":").map(Number);
+  const [startH, startM] = String(officeStartStr).split(":").map(Number);
+
+  const checkInMins = h * 60 + (m || 0);
+  const startMins = startH * 60 + (startM || 0);
+  const graceEndMins = startMins + Number(graceMin || 10);
+
+  if (checkInMins > graceEndMins) {
+    return checkInMins - graceEndMins;
+  }
+  return 0;
+}
+
 
 /* ---------------------------
    markAttendanceCheckOut
@@ -90,10 +105,17 @@ const getTodayAttendance = async (req, res) => {
     const start = parseISTLocalToUTC(nowKey, '00:00:00');
     const end = parseISTLocalToUTC(nowKey, '23:59:59');
 
-    const att = await Attendance.findOne({
+    let att = await Attendance.findOne({
       empId: employeeId,
       date: { $gte: start, $lte: end }
-    }).lean();
+    });
+
+    if (att && (!att.check_in || (att.status || "").toLowerCase() === "absent") && ((att.workingHours || 0) > 0 || att.lastActive)) {
+      att.status = "Present";
+      att.check_in = att.check_in || formatTime(new Date());
+      att.isAutoMarkedAbsent = false;
+      await att.save();
+    }
 
     return res.json(att || {});
   } catch (err) {
@@ -291,11 +313,11 @@ const getMonthlyAttendance = async (req, res) => {
       }
 
       if (att) {
-        // If a check-in exists, treat the day as present in dashboards even if
-        // legacy status was saved as "Absent" by older cutoff rules.
+        // If check-in, lastActive, or working hours exist, treat the day as Present / Half Day even if saved as Absent
+        const hasWorkedOrCheckedIn = !!att.check_in || (att.workingHours || 0) > 0 || (att.totalBreakDuration || 0) > 0 || !!att.lastActive;
         const effectiveStatus =
-          att.check_in && (att.status || "").toLowerCase() === "absent"
-            ? "Present"
+          hasWorkedOrCheckedIn && (att.status || "").toLowerCase() === "absent"
+            ? (att.isLateMinutes > 240 ? "Half Day" : "Present")
             : att.status || "-";
 
         let workingHours = att.workingHours || 0;
@@ -317,11 +339,13 @@ const getMonthlyAttendance = async (req, res) => {
           }
         }
 
+        const lateMins = att.isLateMinutes || calculateLateMinutes(att.check_in, att.officeStart || "09:30", att.graceMinutes || 10);
+
         row.status = effectiveStatus;
         row.check_in = att.check_in;
         row.check_out = att.check_out;
         row.workingHours = Number(workingHours.toFixed(2));
-        row.isLateMinutes = att.isLateMinutes || 0;
+        row.isLateMinutes = lateMins;
         row.breakStart = att.breakStart || null;
         row.breakEnd = breakEnd || null;
         row.totalBreakDuration = totalBreakDuration;
@@ -495,10 +519,11 @@ const getMonthlyAttendanceByAdmin = async (req, res) => {
         }
 
         if (att) {
+          const hasWorkedOrCheckedIn = !!att.check_in || (att.workingHours || 0) > 0 || (att.totalBreakDuration || 0) > 0 || !!att.lastActive;
           const effectiveStatus =
-            att.check_in && (att.status || "").toLowerCase() === "absent"
-              ? "Present"
-              : att.status;
+            hasWorkedOrCheckedIn && (att.status || "").toLowerCase() === "absent"
+              ? (att.isLateMinutes > 240 ? "Half Day" : "Present")
+              : (att.status || "Absent");
 
           let workingHours = att.workingHours || 0;
           let totalBreakDuration = att.totalBreakDuration || 0;
@@ -519,11 +544,13 @@ const getMonthlyAttendanceByAdmin = async (req, res) => {
             }
           }
 
+          const lateMins = att.isLateMinutes || calculateLateMinutes(att.check_in, att.officeStart || emp.officeStart || "09:30", att.graceMinutes || emp.graceMinutes || 10);
+
           row.status = effectiveStatus;
           row.check_in = att.check_in;
           row.check_out = att.check_out;
           row.workingHours = Number(workingHours.toFixed(2));
-          row.isLateMinutes = att.isLateMinutes;
+          row.isLateMinutes = lateMins;
           row.lastActive = att.lastActive || null;
           row.breakStart = att.breakStart || null;
           row.breakEnd = breakEnd || null;
@@ -538,9 +565,9 @@ const getMonthlyAttendanceByAdmin = async (req, res) => {
           else if (s === "paid leave") summary.paidLeaves++;
           else if (s === "unpaid leave") summary.unpaidLeaves++;
 
-          if (att.isLateMinutes > 0) {
+          if (row.isLateMinutes > 0) {
             summary.lateCount++;
-            summary.lateHours += att.isLateMinutes / 60;
+            summary.lateHours += row.isLateMinutes / 60;
           }
 
         } else {
@@ -556,6 +583,8 @@ const getMonthlyAttendanceByAdmin = async (req, res) => {
       finalResult.push({
         empId: emp._id,
         ename: emp.ename,
+        userType: emp.userType,
+        role: emp.role,
         officeStart: emp.officeStart,
         officeEnd: emp.officeEnd,
         graceMinutes: emp.graceMinutes,
@@ -584,7 +613,7 @@ async function adminUpdateOfficeTiming(req, res) {
 
     // 🔐 Only SuperAdmin (or Admin) can change these settings
     if (req.user?.role !== "superadmin" && req.user?.role !== "admin") {
-       return res.status(403).json({ message: "Only Admin/SuperAdmin can change these settings" });
+      return res.status(403).json({ message: "Only Admin/SuperAdmin can change these settings" });
     }
 
     const emp = await SignUp.findById(employeeId);
@@ -595,12 +624,12 @@ async function adminUpdateOfficeTiming(req, res) {
     if (officeEnd !== undefined) updateFields.officeEnd = officeEnd;
     if (graceMinutes !== undefined) updateFields.graceMinutes = graceMinutes;
     if (dailyWorkingHours !== undefined) updateFields.dailyWorkingHours = dailyWorkingHours;
-    
+
     if (screenshotInterval !== undefined) {
       const val = parseInt(screenshotInterval);
       if (!isNaN(val)) updateFields.screenshotInterval = val;
     }
-    
+
     if (inactivityTimeout !== undefined) {
       const val = parseInt(inactivityTimeout);
       if (!isNaN(val)) updateFields.inactivityTimeout = val;

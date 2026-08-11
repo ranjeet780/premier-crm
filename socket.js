@@ -46,7 +46,7 @@ async function joinUserGroups(socket, userId) {
 }
 
 function initSocket(server) {
-  const allowedOrigins = (process.env.CORS_ORIGIN || "")
+  const allowedOrigins = (process.env.CORS_ORIGIN || "*")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
@@ -54,49 +54,68 @@ function initSocket(server) {
   io = new Server(server, {
     cors: {
       origin(origin, callback) {
-        if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+        if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
           return callback(null, true);
         }
-        return callback(new Error("Not allowed by CORS"));
+        return callback(null, true);
       },
       methods: ["GET", "POST"],
       credentials: true,
     },
+    transports: ["websocket", "polling"],
   });
 
   console.log("Socket.io initialized");
 
+  const registerSocketUser = async (socket, token) => {
+    try {
+      if (!token) return;
+      const cleanToken = token.replace("Bearer ", "").trim();
+      const decoded = jwt.verify(cleanToken, process.env.JWT_SECRET);
+      const userId = String(decoded.id || decoded._id || "");
+      const role = String(decoded.role || "employee").toLowerCase();
+
+      if (!userId) return;
+
+      socket.userId = userId;
+      socket.userRole = role;
+
+      addOnlineSocket(userId, socket.id);
+
+      socket.join(`user:${userId}`);
+      socket.join(`role:${role}`);
+
+      if (role === "admin" || role === "superadmin" || role === "hr") {
+        socket.join("admins");
+      }
+
+      await joinUserGroups(socket, userId);
+      io.emit("presence:update", { userId, isOnline: true });
+    } catch (err) {
+      console.error("Socket auth register failed:", err.message);
+    }
+  };
+
   io.on("connection", (socket) => {
     console.log("Socket connected:", socket.id);
 
+    const tokenFromAuth = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
+    if (tokenFromAuth) {
+      registerSocketUser(socket, tokenFromAuth);
+    }
+
     socket.on("register", async (token) => {
-      try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = String(decoded.id || decoded._id || "");
-        const role = decoded.role || "employee";
-
-        if (!userId) return;
-
-        socket.userId = userId;
-        socket.userRole = role;
-
-        addOnlineSocket(userId, socket.id);
-
-        socket.join(`user:${userId}`);
-        await joinUserGroups(socket, userId);
-
-        io.emit("presence:update", { userId, isOnline: true });
-      } catch (err) {
-        console.error("Register failed:", err.message);
-      }
+      await registerSocketUser(socket, token);
     });
 
     socket.on("join-admin", () => {
       socket.join("admins");
+      socket.join("role:admin");
+      socket.join("role:superadmin");
     });
 
     socket.on("join-role", (role) => {
-      socket.join(`role:${role}`);
+      if (role) socket.join(`role:${String(role).toLowerCase()}`);
     });
 
     socket.on("join-chat-group", async ({ groupId }) => {
