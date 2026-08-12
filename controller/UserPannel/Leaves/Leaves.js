@@ -11,8 +11,8 @@ const addLeave = async (req, res) => {
   try {
     const {
       employeeId,
-      leave_type,      
-      leave_category,  
+      leave_type,
+      leave_category,
       from_date,
       to_date,
       reason

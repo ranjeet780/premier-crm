@@ -56,25 +56,25 @@ const addTask = async (req, res) => {
     //   comments: []
     // });
 
-const newTask = new Task({
-  clientId,
-  projectId,
-  serviceId,
-  departmentId,
-  assignedTo,
-  title,
-  category,
-  startDate,
-  dueDate,
-  status: status || "Pending",
-  description,
-  priority: priority || "Low",
-  estimatedTime: estimatedTime || 0,
-  timeSpent: 0,
-  timeLogs: [],
-  comments: [],
-  statusHistory: [],   // ✅ ADD THIS
-});
+    const newTask = new Task({
+      clientId,
+      projectId,
+      serviceId,
+      departmentId,
+      assignedTo,
+      title,
+      category,
+      startDate,
+      dueDate,
+      status: status || "Pending",
+      description,
+      priority: priority || "Low",
+      estimatedTime: estimatedTime || 0,
+      timeSpent: 0,
+      timeLogs: [],
+      comments: [],
+      statusHistory: [],   // ✅ ADD THIS
+    });
 
 
     const saveTask = await newTask.save();
@@ -180,7 +180,7 @@ const getTasks = async (req, res) => {
       dueDate: t.dueDate,
       estimatedTime: t.estimatedTime,
       timeSpent: t.timeSpent,
-       timeLogs: t.timeLogs, 
+      timeLogs: t.timeLogs,
       assignedTo: t.assignedTo.map(u => ({ _id: u._id, name: u.ename || u.name || u.email })),
       status: t.status,
       priority: t.priority,
@@ -297,7 +297,7 @@ const updateTask = async (req, res) => {
       body,
       { new: true }
     )
-      .populate("assignedTo", "ename") 
+      .populate("assignedTo", "ename")
       .populate("clientId", "leadName")
       .populate("projectId", "projectName")
       .populate("serviceId", "serviceName");

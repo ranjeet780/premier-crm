@@ -8,26 +8,26 @@ const {
 } = require("../../utils/employeeIdAllocator");
 
 const UpdateType = async (req, res) => {
-    try {
-        const { employeeId } = req.params;
-        const { userType } = req.body;
+  try {
+    const { employeeId } = req.params;
+    const { userType } = req.body;
 
-        const updateType = await SignUp.findOneAndUpdate(
-            { employeeId },
-            { userType },
-            { new: true }  // returns updated document
-        );
+    const updateType = await SignUp.findOneAndUpdate(
+      { employeeId },
+      { userType },
+      { new: true }  // returns updated document
+    );
 
-        if (!updateType) {
-            return res.status(404).json({ message: "User not found" });
-        }
-
-        res.json({ message: "Move to Employee Successfully", user: updateType });
-
-    } catch (error) {
-        console.error("UpdateType error:", error);
-        res.status(500).json({ error: error.message });
+    if (!updateType) {
+      return res.status(404).json({ message: "User not found" });
     }
+
+    res.json({ message: "Move to Employee Successfully", user: updateType });
+
+  } catch (error) {
+    console.error("UpdateType error:", error);
+    res.status(500).json({ error: error.message });
+  }
 };
 
 const getAllEmployees = async (req, res) => {
@@ -121,6 +121,17 @@ const toggleEmployeeBlock = async (req, res) => {
       { $set: updateData },
       { new: true, runValidators: false }
     );
+
+    try {
+      const { getIO } = require("../../socket");
+      getIO().emit("employee:updated", {
+        _id: String(updatedUser._id),
+        employeeId: updatedUser.employeeId,
+        isActive: updatedUser.isActive
+      });
+    } catch (sErr) {
+      console.error("Socket emit error in toggleEmployeeBlock:", sErr.message);
+    }
 
     return res.status(200).json({
       message: isActive ? "Employee unblocked successfully" : "Employee blocked successfully",

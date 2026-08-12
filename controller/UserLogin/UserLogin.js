@@ -127,6 +127,17 @@ const UserLogin = async (req, res) => {
         isLocked: false,
         unlockOTP: null
       });
+      try {
+        const { getIO } = require("../../socket");
+        getIO().emit("employee:updated", {
+          _id: String(emp._id),
+          employeeId: emp.employeeId,
+          isLocked: false,
+          unlockOTP: null
+        });
+      } catch (sErr) {
+        console.error("Socket emit error on unlock:", sErr.message);
+      }
     }
 
     const token = jwt.sign(
@@ -569,11 +580,25 @@ const lockUserByInactivity = async (req, res) => {
     // Generate random 6-digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-    await SignUp.findByIdAndUpdate(employeeId, {
+    const updated = await SignUp.findByIdAndUpdate(employeeId, {
       $set: { isLocked: true, unlockOTP: code },
       $inc: { inactivityLogoutCount: 1 },
       $push: { inactivityHistory: new Date() }
-    });
+    }, { new: true });
+
+    try {
+      const { getIO } = require("../../socket");
+      getIO().emit("employee:updated", {
+        _id: String(updated._id),
+        employeeId: updated.employeeId,
+        isLocked: true,
+        unlockOTP: code,
+        inactivityLogoutCount: updated.inactivityLogoutCount,
+        inactivityHistory: updated.inactivityHistory
+      });
+    } catch (sErr) {
+      console.error("Socket emit error in lockUserByInactivity:", sErr.message);
+    }
 
     res.json({ message: "User locked successfully" });
   } catch (err) {
@@ -617,6 +642,21 @@ const generateManualCode = async (req, res) => {
     }
 
     console.log(" [DEBUG] Successfully updated employee. New Count:", updated.inactivityLogoutCount);
+
+    try {
+      const { getIO } = require("../../socket");
+      getIO().emit("employee:updated", {
+        _id: String(updated._id),
+        employeeId: updated.employeeId,
+        isLocked: true,
+        unlockOTP: code,
+        inactivityLogoutCount: updated.inactivityLogoutCount,
+        inactivityHistory: updated.inactivityHistory
+      });
+    } catch (sErr) {
+      console.error("Socket emit error in generateManualCode:", sErr.message);
+    }
+
     res.json({ message: "Code generated successfully", code });
   } catch (err) {
     console.error(" [DEBUG] generateManualCode error:", err);
