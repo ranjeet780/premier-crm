@@ -1,3 +1,5 @@
+const AuditLog = require("../model/AuditLog/AuditLog");
+
 const parseDeviceName = (userAgent = "") => {
   if (!userAgent || typeof userAgent !== "string") return "Unknown Device";
   const ua = userAgent.toLowerCase();
@@ -36,7 +38,7 @@ const createAuditLog = async ({
 
     await AuditLog.create({
       userName: userName || "Unknown User",
-      userEmail: userEmail || "N/A",
+      userEmail: userEmail || "unknown@system.local",
       userRole: userRole || "user",
       userId: userId || null,
       action: action || "LOGIN",

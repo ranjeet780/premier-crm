@@ -73,7 +73,7 @@ const UserLogin = async (req, res) => {
       await createAuditLog({
         userName: emp.ename,
         userEmail: emp.official_email,
-        userRole: emp.role || "employee",
+        userRole: emp.userType || emp.role || "employee",
         userId: emp._id,
         action: "FAILED_LOGIN",
         status: "FAILED",
@@ -100,7 +100,7 @@ const UserLogin = async (req, res) => {
       await createAuditLog({
         userName: emp.ename,
         userEmail: emp.official_email,
-        userRole: emp.role || "employee",
+        userRole: emp.userType || emp.role || "employee",
         userId: emp._id,
         action: "FAILED_LOGIN",
         status: "FAILED",
@@ -139,7 +139,7 @@ const UserLogin = async (req, res) => {
     await createAuditLog({
       userName: emp.ename,
       userEmail: emp.official_email,
-      userRole: emp.role || "employee",
+      userRole: emp.userType || emp.role || "employee",
       userId: emp._id,
       action: "LOGIN",
       status: "SUCCESS",

@@ -8,7 +8,7 @@ const AuditLogSchema = new mongoose.Schema(
     },
     userEmail: {
       type: String,
-      required: true,
+      default: "unknown@system.local",
       trim: true,
     },
     userRole: {
@@ -16,12 +16,11 @@ const AuditLogSchema = new mongoose.Schema(
       default: "user",
     },
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
     },
     action: {
       type: String,
-      enum: ["LOGIN", "LOGOUT", "FAILED_LOGIN", "OTHER"],
       default: "LOGIN",
     },
     status: {
